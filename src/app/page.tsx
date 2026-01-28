@@ -32,7 +32,7 @@ export default function Home() {
   const [showRules, setShowRules] = useState(false);
   const [rules, setRules] = useState<TypeRule[]>(defaultRules);
   const [editingRule, setEditingRule] = useState<TypeRule | null>(null);
-  const [databaseType, setDatabaseType] = useState('spark');
+  const [selectedDatabaseTypes, setSelectedDatabaseTypes] = useState<string[]>(['spark']);
 
   const databaseTypes = [
     { value: 'spark', label: 'Spark SQL' },
@@ -50,6 +50,11 @@ export default function Home() {
       return;
     }
 
+    if (selectedDatabaseTypes.length === 0) {
+      setError('请至少选择一个数据库类型');
+      return;
+    }
+
     setLoading(true);
     setError('');
 
@@ -62,7 +67,7 @@ export default function Home() {
         body: JSON.stringify({
           sql: sqlInput,
           customRules: rules,
-          databaseType: databaseType,
+          databaseTypes: selectedDatabaseTypes,
         }),
       });
 
@@ -71,7 +76,13 @@ export default function Home() {
       }
 
       const data = await response.json();
-      setDdlOutput(data.ddl);
+      // 支持单个或多个DDL
+      if (Array.isArray(data.ddls)) {
+        // 多个数据库，显示tab分隔
+        setDdlOutput(data.ddls.map((d: any) => `-- ${d.databaseType}\n${d.ddl}`).join('\n\n'));
+      } else {
+        setDdlOutput(data.ddl);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '生成失败');
     } finally {
@@ -141,26 +152,42 @@ export default function Home() {
 
         {/* 数据库类型选择 */}
         <div className="mb-6 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
-          <div className="flex items-center justify-between">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                目标数据库类型
-              </label>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                选择要生成建表语句的数据库类型
-              </p>
-            </div>
-            <select
-              value={databaseType}
-              onChange={(e) => setDatabaseType(e.target.value)}
-              className="rounded border border-slate-300 bg-white px-4 py-2 text-sm dark:border-slate-600 dark:bg-slate-900"
-            >
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+              目标数据库类型（最多选择2个）
+            </label>
+            <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
+              选择要生成建表语句的数据库类型
+            </p>
+            <div className="flex flex-wrap gap-3">
               {databaseTypes.map((db) => (
-                <option key={db.value} value={db.value}>
-                  {db.label}
-                </option>
+                <label
+                  key={db.value}
+                  className="flex items-center gap-2 rounded border border-slate-300 bg-slate-50 px-3 py-2 cursor-pointer hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:hover:bg-slate-800"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedDatabaseTypes.includes(db.value)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        if (selectedDatabaseTypes.length < 2) {
+                          setSelectedDatabaseTypes([...selectedDatabaseTypes, db.value]);
+                        }
+                      } else {
+                        setSelectedDatabaseTypes(selectedDatabaseTypes.filter(t => t !== db.value));
+                      }
+                    }}
+                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900"
+                  />
+                  <span className="text-sm">{db.label}</span>
+                </label>
               ))}
-            </select>
+            </div>
+            {selectedDatabaseTypes.length === 0 && (
+              <p className="mt-2 text-xs text-red-600 dark:text-red-400">
+                请至少选择一个数据库类型
+              </p>
+            )}
           </div>
         </div>
 
@@ -171,7 +198,7 @@ export default function Home() {
             className="flex w-full items-center justify-between p-4 text-left"
           >
             <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-              ⚙️ 类型推断规则配置 ({rules.length} 条)
+              ⚙️ 字段类型映射 ({rules.length} 条)
             </h2>
             <span className="text-slate-500 dark:text-slate-400">
               {showRules ? '▼' : '▶'}
@@ -186,7 +213,13 @@ export default function Home() {
                     配置字段关键词到数据类型的映射规则（按优先级从上到下匹配）
                   </p>
                   <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    数据类型支持 Spark SQL 的所有类型，可自定义输入任意类型
+                    当前选择的数据库类型：
+                    {selectedDatabaseTypes.length === 0
+                      ? ' 未选择'
+                      : selectedDatabaseTypes.map(t => databaseTypes.find(d => d.value === t)?.label).join('、')}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    数据类型支持各数据库的标准类型，可自定义输入任意类型
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -355,7 +388,12 @@ export default function Home() {
           <div className="flex flex-col">
             <div className="mb-2 flex items-center justify-between">
               <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                {databaseTypes.find(db => db.value === databaseType)?.label} 建表语句
+                {selectedDatabaseTypes.length === 0
+                  ? '建表语句'
+                  : selectedDatabaseTypes.length === 1
+                    ? `${databaseTypes.find(db => db.value === selectedDatabaseTypes[0])?.label} 建表语句`
+                    : `建表语句 (${selectedDatabaseTypes.length} 个数据库)`
+                }
               </label>
               {ddlOutput && (
                 <Button onClick={handleCopy} variant="outline" size="sm">
@@ -376,7 +414,7 @@ export default function Home() {
         <div className="mt-8 rounded-lg border border-slate-200 bg-white p-4 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
           <p>支持解析 SELECT 查询语句中的字段，自动推断字段类型并生成建表 DDL</p>
           <p className="mt-2">
-            点击上方"类型推断规则配置"可自定义字段类型推断规则和数据类型
+            点击上方"字段类型映射"可自定义字段类型推断规则和数据类型
           </p>
           <p className="mt-2 text-xs">
             Spark SQL 支持的所有数据类型均可使用：STRING, INT, BIGINT, FLOAT, DOUBLE, DECIMAL(p,s), BOOLEAN, DATE, TIMESTAMP, BINARY, ARRAY&lt;type&gt;, MAP&lt;k,v&gt;, STRUCT&lt;field&gt; 等

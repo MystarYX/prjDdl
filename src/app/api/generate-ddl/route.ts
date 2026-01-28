@@ -470,10 +470,21 @@ function mapDataTypeForDatabase(type: string, databaseType: DatabaseType): strin
   return type;
 }
 
+// 数据库类型列表（用于显示标签）
+const databaseTypeLabels: Record<DatabaseType, string> = {
+  spark: 'Spark SQL',
+  mysql: 'MySQL',
+  postgresql: 'PostgreSQL',
+  starrocks: 'StarRocks',
+  clickhouse: 'ClickHouse',
+  hive: 'Hive',
+  doris: 'Doris',
+};
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { sql, customRules, databaseType = 'spark' } = body;
+    const { sql, customRules, databaseTypes = ['spark'] } = body;
 
     if (!sql || typeof sql !== 'string') {
       return NextResponse.json(
@@ -483,9 +494,13 @@ export async function POST(request: NextRequest) {
     }
 
     // 验证数据库类型
-    if (!databaseConfigs[databaseType as DatabaseType]) {
+    const validDatabaseTypes = databaseTypes.filter(
+      (dbType: string) => databaseConfigs[dbType as DatabaseType]
+    );
+
+    if (validDatabaseTypes.length === 0) {
       return NextResponse.json(
-        { error: `不支持的数据库类型: ${databaseType}` },
+        { error: '请提供至少一个有效的数据库类型' },
         { status: 400 }
       );
     }
@@ -499,9 +514,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const ddl = generateDDL(fields, customRules, databaseType as DatabaseType);
+    // 为每个数据库类型生成DDL
+    const ddls = validDatabaseTypes.map((dbType: string) => ({
+      databaseType: dbType,
+      label: databaseTypeLabels[dbType as DatabaseType],
+      ddl: generateDDL(fields, customRules, dbType as DatabaseType),
+    }));
 
-    return NextResponse.json({ ddl });
+    // 如果只有一个数据库类型，返回单个DDL格式（向后兼容）
+    if (ddls.length === 1) {
+      return NextResponse.json({ ddl: ddls[0].ddl });
+    }
+
+    // 多个数据库类型，返回数组格式
+    return NextResponse.json({ ddls });
   } catch (error) {
     console.error('生成DDL错误:', error);
     return NextResponse.json(
