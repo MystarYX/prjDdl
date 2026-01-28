@@ -32,6 +32,17 @@ export default function Home() {
   const [showRules, setShowRules] = useState(false);
   const [rules, setRules] = useState<TypeRule[]>(defaultRules);
   const [editingRule, setEditingRule] = useState<TypeRule | null>(null);
+  const [databaseType, setDatabaseType] = useState('spark');
+
+  const databaseTypes = [
+    { value: 'spark', label: 'Spark SQL' },
+    { value: 'mysql', label: 'MySQL' },
+    { value: 'postgresql', label: 'PostgreSQL' },
+    { value: 'starrocks', label: 'StarRocks' },
+    { value: 'clickhouse', label: 'ClickHouse' },
+    { value: 'hive', label: 'Hive' },
+    { value: 'doris', label: 'Doris' },
+  ];
 
   const handleGenerate = async () => {
     if (!sqlInput.trim()) {
@@ -51,6 +62,7 @@ export default function Home() {
         body: JSON.stringify({
           sql: sqlInput,
           customRules: rules,
+          databaseType: databaseType,
         }),
       });
 
@@ -120,11 +132,36 @@ export default function Home() {
         {/* 标题区 */}
         <div className="mb-8 text-center">
           <h1 className="mb-2 text-4xl font-bold text-slate-900 dark:text-slate-100">
-            Spark SQL 建表语句生成器
+            SQL 建表语句生成器
           </h1>
           <p className="text-lg text-slate-600 dark:text-slate-400">
-            自动解析SQL查询，生成符合规范的Spark SQL建表语句
+            自动解析SQL查询，生成符合规范的建表语句
           </p>
+        </div>
+
+        {/* 数据库类型选择 */}
+        <div className="mb-6 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                目标数据库类型
+              </label>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                选择要生成建表语句的数据库类型
+              </p>
+            </div>
+            <select
+              value={databaseType}
+              onChange={(e) => setDatabaseType(e.target.value)}
+              className="rounded border border-slate-300 bg-white px-4 py-2 text-sm dark:border-slate-600 dark:bg-slate-900"
+            >
+              {databaseTypes.map((db) => (
+                <option key={db.value} value={db.value}>
+                  {db.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* 规则配置区 */}
@@ -318,7 +355,7 @@ export default function Home() {
           <div className="flex flex-col">
             <div className="mb-2 flex items-center justify-between">
               <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                Spark SQL 建表语句
+                {databaseTypes.find(db => db.value === databaseType)?.label} 建表语句
               </label>
               {ddlOutput && (
                 <Button onClick={handleCopy} variant="outline" size="sm">

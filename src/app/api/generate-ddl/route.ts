@@ -13,6 +13,68 @@ interface TypeRule {
   priority: number;
 }
 
+// 数据库类型定义
+type DatabaseType = 'spark' | 'mysql' | 'postgresql' | 'starrocks' | 'clickhouse' | 'hive' | 'doris';
+
+// 数据库配置
+const databaseConfigs: Record<DatabaseType, {
+  createTablePrefix: string;
+  createTableSuffix: string;
+  commentSyntax: 'INLINE' | 'SEPARATE' | 'MATERIALIZED';
+  supportsCreateIfNotExists: boolean;
+  tableNamePrefix: string;
+}> = {
+  spark: {
+    createTablePrefix: 'CREATE TABLE IF NOT EXISTS',
+    createTableSuffix: ') COMMENT',
+    commentSyntax: 'INLINE',
+    supportsCreateIfNotExists: true,
+    tableNamePrefix: '',
+  },
+  mysql: {
+    createTablePrefix: 'CREATE TABLE IF NOT EXISTS',
+    createTableSuffix: ') COMMENT',
+    commentSyntax: 'INLINE',
+    supportsCreateIfNotExists: true,
+    tableNamePrefix: '',
+  },
+  postgresql: {
+    createTablePrefix: 'CREATE TABLE',
+    createTableSuffix: ')',
+    commentSyntax: 'SEPARATE',
+    supportsCreateIfNotExists: false,
+    tableNamePrefix: '',
+  },
+  starrocks: {
+    createTablePrefix: 'CREATE TABLE IF NOT EXISTS',
+    createTableSuffix: ') COMMENT',
+    commentSyntax: 'INLINE',
+    supportsCreateIfNotExists: true,
+    tableNamePrefix: '',
+  },
+  clickhouse: {
+    createTablePrefix: 'CREATE TABLE IF NOT EXISTS',
+    createTableSuffix: ') COMMENT',
+    commentSyntax: 'INLINE',
+    supportsCreateIfNotExists: true,
+    tableNamePrefix: '',
+  },
+  hive: {
+    createTablePrefix: 'CREATE TABLE IF NOT EXISTS',
+    createTableSuffix: ') COMMENT',
+    commentSyntax: 'INLINE',
+    supportsCreateIfNotExists: true,
+    tableNamePrefix: '',
+  },
+  doris: {
+    createTablePrefix: 'CREATE TABLE IF NOT EXISTS',
+    createTableSuffix: ') COMMENT',
+    commentSyntax: 'INLINE',
+    supportsCreateIfNotExists: true,
+    tableNamePrefix: '',
+  },
+};
+
 function parseSQLFields(sql: string): FieldInfo[] {
   const fields: FieldInfo[] = [];
 
@@ -327,39 +389,103 @@ function inferFieldType(fieldName: string, customRules?: TypeRule[]): string {
   return 'STRING';
 }
 
-function generateDDL(fields: FieldInfo[], customRules?: TypeRule[]): string {
+function generateDDL(
+  fields: FieldInfo[],
+  customRules?: TypeRule[],
+  databaseType: DatabaseType = 'spark'
+): string {
+  const config = databaseConfigs[databaseType];
   const maxNameLength = Math.max(...fields.map(f => f.name.length), 30);
   const maxTypeLength = 18;
 
-  let ddl = 'CREATE TABLE IF NOT EXISTS 表名 (\n';
+  // 生成表名（根据数据库类型调整）
+  let tableName = '表名';
 
-  fields.forEach((field, index) => {
-    const fieldType = inferFieldType(field.name, customRules);
+  // 根据数据库类型调整数据类型
+  const adjustedFields = fields.map(field => ({
+    ...field,
+    type: mapDataTypeForDatabase(inferFieldType(field.name, customRules), databaseType),
+  }));
+
+  let ddl = `${config.createTablePrefix} ${tableName} (\n`;
+
+  adjustedFields.forEach((field, index) => {
     const paddedName = field.name.padEnd(maxNameLength);
-    const paddedType = fieldType.padEnd(maxTypeLength);
+    const paddedType = field.type.padEnd(maxTypeLength);
 
     const commentText = `COMMENT '${field.comment.replace(/'/g, "''")}'`;
 
     if (index === 0) {
-      ddl += `    ${paddedName} ${paddedType} ${commentText}`;
+      ddl += `    ${paddedName} ${paddedType}`;
+      if (config.commentSyntax === 'INLINE') {
+        ddl += ` ${commentText}`;
+      }
     } else {
-      ddl += `\n   ,${paddedName} ${paddedType} ${commentText}`;
+      ddl += `\n   ,${paddedName} ${paddedType}`;
+      if (config.commentSyntax === 'INLINE') {
+        ddl += ` ${commentText}`;
+      }
     }
   });
 
-  ddl += '\n) COMMENT \'信用占用明细表\';';
+  ddl += '\n)';
+
+  // 添加表注释
+  if (config.commentSyntax === 'INLINE') {
+    ddl += ` COMMENT '信用占用明细表';`;
+  } else if (config.commentSyntax === 'SEPARATE') {
+    ddl += ';';
+    // PostgreSQL 风格的单独注释
+    ddl += '\n\n';
+    ddl += `COMMENT ON TABLE ${tableName} IS '信用占用明细表';\n`;
+    adjustedFields.forEach(field => {
+      ddl += `COMMENT ON COLUMN ${tableName}.${field.name} IS '${field.comment.replace(/'/g, "''")}';\n`;
+    });
+  }
 
   return ddl;
+}
+
+// 将通用数据类型映射到特定数据库的类型
+function mapDataTypeForDatabase(type: string, databaseType: DatabaseType): string {
+  // 大多数数据库使用相同的类型定义，但有一些特殊情况
+  if (databaseType === 'clickhouse') {
+    // ClickHouse 特殊类型映射
+    if (type === 'STRING') return 'String';
+    if (type === 'DATE') return 'Date';
+    if (type === 'TIMESTAMP') return 'DateTime';
+    if (type.startsWith('DECIMAL')) {
+      // DECIMAL(24,6) -> Decimal(24, 6)
+      return type.replace('DECIMAL', 'Decimal');
+    }
+  }
+
+  if (databaseType === 'postgresql') {
+    // PostgreSQL 特殊类型映射
+    if (type === 'STRING') return 'TEXT';
+    if (type === 'TIMESTAMP') return 'TIMESTAMP';
+  }
+
+  // 其他数据库保持原样
+  return type;
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { sql, customRules } = body;
+    const { sql, customRules, databaseType = 'spark' } = body;
 
     if (!sql || typeof sql !== 'string') {
       return NextResponse.json(
         { error: '请提供有效的SQL查询语句' },
+        { status: 400 }
+      );
+    }
+
+    // 验证数据库类型
+    if (!databaseConfigs[databaseType as DatabaseType]) {
+      return NextResponse.json(
+        { error: `不支持的数据库类型: ${databaseType}` },
         { status: 400 }
       );
     }
@@ -373,7 +499,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const ddl = generateDDL(fields, customRules);
+    const ddl = generateDDL(fields, customRules, databaseType as DatabaseType);
 
     return NextResponse.json({ ddl });
   } catch (error) {
