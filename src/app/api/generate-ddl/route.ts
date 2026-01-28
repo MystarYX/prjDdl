@@ -432,12 +432,12 @@ function generateDDL(
 
   // 添加表注释
   if (config.commentSyntax === 'INLINE') {
-    ddl += ` COMMENT '信用占用明细表';`;
+    ddl += ` COMMENT '';`;
   } else if (config.commentSyntax === 'SEPARATE') {
     ddl += ';';
     // PostgreSQL 风格的单独注释
     ddl += '\n\n';
-    ddl += `COMMENT ON TABLE ${tableName} IS '信用占用明细表';\n`;
+    ddl += `COMMENT ON TABLE ${tableName} IS '';\n`;
     adjustedFields.forEach(field => {
       ddl += `COMMENT ON COLUMN ${tableName}.${field.name} IS '${field.comment.replace(/'/g, "''")}';\n`;
     });
