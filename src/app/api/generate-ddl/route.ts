@@ -9,18 +9,46 @@ interface FieldInfo {
 function parseSQLFields(sql: string): FieldInfo[] {
   const fields: FieldInfo[] = [];
 
-  // 移除注释
+  // 移除行注释（保留换行）
   const cleanSql = sql
     .replace(/--.*$/gm, '')
     .replace(/\/\*[\s\S]*?\*\//g, '');
 
-  // 提取 SELECT ... FROM 之间的内容
-  const selectMatch = cleanSql.match(/SELECT\s+(.*?)\s+FROM/i);
-  if (!selectMatch) {
+  // 提取 SELECT ... FROM 之间的内容（支持多行和复杂子查询）
+  // 使用平衡括号计数来确保找到正确的FROM
+  let parenCount = 0;
+  let selectStart = -1;
+  let fromPos = -1;
+
+  // 找到SELECT关键字的位置
+  const selectMatch = cleanSql.match(/SELECT\s/i);
+  if (!selectMatch || selectMatch.index === undefined) {
     throw new Error('无法解析SQL，请确保输入的是有效的SELECT查询');
   }
+  selectStart = selectMatch.index + selectMatch[0].length;
 
-  const selectClause = selectMatch[1];
+  // 从SELECT之后开始查找FROM
+  for (let i = selectStart; i < cleanSql.length; i++) {
+    const char = cleanSql[i];
+
+    if (char === '(') {
+      parenCount++;
+    } else if (char === ')') {
+      parenCount--;
+    } else if (parenCount === 0) {
+      // 检查是否是FROM关键字（确保不是字段名的一部分）
+      if (cleanSql.substr(i, 5).toUpperCase() === 'FROM ') {
+        fromPos = i;
+        break;
+      }
+    }
+  }
+
+  if (fromPos === -1) {
+    throw new Error('无法找到FROM关键字，请检查SQL格式');
+  }
+
+  const selectClause = cleanSql.substring(selectStart, fromPos).trim();
 
   // 分割字段（考虑逗号，但忽略括号内的逗号）
   const fieldExpressions: string[] = [];
