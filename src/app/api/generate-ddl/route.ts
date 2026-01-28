@@ -20,8 +20,8 @@ function parseSQLFields(sql: string): FieldInfo[] {
   let selectStart = -1;
   let fromPos = -1;
 
-  // 找到SELECT关键字的位置
-  const selectMatch = cleanSql.match(/SELECT\s/i);
+  // 找到SELECT关键字的位置（支持INSERT INTO...SELECT）
+  const selectMatch = cleanSql.match(/\bSELECT\b/i);
   if (!selectMatch || selectMatch.index === undefined) {
     throw new Error('无法解析SQL，请确保输入的是有效的SELECT查询');
   }
@@ -36,10 +36,18 @@ function parseSQLFields(sql: string): FieldInfo[] {
     } else if (char === ')') {
       parenCount--;
     } else if (parenCount === 0) {
-      // 检查是否是FROM关键字（确保不是字段名的一部分）
-      if (cleanSql.substr(i, 5).toUpperCase() === 'FROM ') {
-        fromPos = i;
-        break;
+      // 检查是否是FROM关键字（确保是独立的单词）
+      if (cleanSql.substr(i, 4).toUpperCase() === 'FROM') {
+        // 检查FROM后面是空白符或结束符
+        const nextChar = cleanSql[i + 4];
+        if (!nextChar || /\s/.test(nextChar)) {
+          // 检查FROM前面是空白符或开始符
+          const prevChar = i === 0 ? '' : cleanSql[i - 1];
+          if (i === 0 || /\s/.test(prevChar)) {
+            fromPos = i;
+            break;
+          }
+        }
       }
     }
   }
@@ -160,12 +168,35 @@ function parseFieldExpression(expr: string): FieldInfo | null {
 function inferFieldType(fieldName: string): string {
   const name = fieldName.toLowerCase();
 
-  // 日期字段（优先级最高）
+  // 币种代码字段 - 必须在最前面判断
+  if (
+    name === 'fcytp' ||
+    name === 'scytp' ||
+    name === 'cytp' ||
+    name === 'currency_type' ||
+    name.includes('币种代码')
+  ) {
+    return 'STRING';
+  }
+
+  // 模式、代码字段 - 优先级高于date
+  if (
+    name.includes('mode') ||
+    name.includes('code') ||
+    name.includes('icode')
+  ) {
+    return 'STRING';
+  }
+
+  // 日期字段（优先级高）- 排除day（天数）
   if (
     name.includes('date') ||
     name.includes('日期')
   ) {
-    return 'DATE';
+    // 如果是days，则不是日期
+    if (!name.includes('day') && !name.includes('days')) {
+      return 'DATE';
+    }
   }
 
   // 时间字段
@@ -189,6 +220,18 @@ function inferFieldType(fieldName: string): string {
     return 'STRING';
   }
 
+  // 名称字段（xxx_name, xxx_dscr, xxx_rmrk）
+  if (
+    name.includes('_name') ||
+    name.includes('_dscr') ||
+    name.includes('_rmrk') ||
+    name.includes('name') ||
+    name.includes('描述') ||
+    name.includes('备注')
+  ) {
+    return 'STRING';
+  }
+
   // 标记字段（flag、标识）
   if (
     name.includes('flag') ||
@@ -198,12 +241,19 @@ function inferFieldType(fieldName: string): string {
     return 'STRING';
   }
 
+  // 天数字段（days）
+  if (
+    name.includes('days') ||
+    (name.includes('day') && name !== 'weekday')
+  ) {
+    return 'DECIMAL(24, 6)';
+  }
+
   // 金额字段（包含amount、金额、price、金额相关的字段）
   if (
     name.includes('amt') ||
     name.includes('amount') ||
     name.includes('price') ||
-    name.includes('金额') ||
     name.includes('金额') ||
     name.includes('ocy') || // 本位币
     name.includes('rcy') ||  // 折算
