@@ -13,99 +13,6 @@ interface TypeRule {
   priority: number;
 }
 
-interface TypeMapping {
-  sparkType: string;
-  dbType: string;
-}
-
-type DatabaseType = 'spark' | 'mysql' | 'starrocks';
-
-interface DatabaseConfig {
-  type: DatabaseType;
-  name: string;
-  commentSyntax: string;
-  primaryKeySyntax?: string;
-  defaultTableComment: string;
-  typeMappings: TypeMapping[];
-}
-
-const databaseConfigs: Record<DatabaseType, DatabaseConfig> = {
-  spark: {
-    type: 'spark',
-    name: 'Spark SQL',
-    commentSyntax: "COMMENT '{comment}'",
-    defaultTableComment: '信用占用明细表',
-    typeMappings: [
-      { sparkType: 'STRING', dbType: 'STRING' },
-      { sparkType: 'DECIMAL(24,6)', dbType: 'DECIMAL(24,6)' },
-      { sparkType: 'DATE', dbType: 'DATE' },
-      { sparkType: 'TIMESTAMP', dbType: 'TIMESTAMP' },
-      { sparkType: 'INT', dbType: 'INT' },
-      { sparkType: 'BIGINT', dbType: 'BIGINT' },
-      { sparkType: 'FLOAT', dbType: 'FLOAT' },
-      { sparkType: 'DOUBLE', dbType: 'DOUBLE' },
-      { sparkType: 'BOOLEAN', dbType: 'BOOLEAN' },
-      { sparkType: 'BINARY', dbType: 'BINARY' },
-      { sparkType: 'ARRAY<STRING>', dbType: 'ARRAY<STRING>' },
-      { sparkType: 'ARRAY<INT>', dbType: 'ARRAY<INT>' },
-      { sparkType: 'MAP<STRING,STRING>', dbType: 'MAP<STRING,STRING>' },
-    ],
-  },
-  mysql: {
-    type: 'mysql',
-    name: 'MySQL',
-    commentSyntax: "COMMENT '{comment}'",
-    primaryKeySyntax: 'PRIMARY KEY',
-    defaultTableComment: '信用占用明细表',
-    typeMappings: [
-      { sparkType: 'STRING', dbType: 'VARCHAR(255)' },
-      { sparkType: 'STRING(500)', dbType: 'VARCHAR(500)' },
-      { sparkType: 'STRING(1000)', dbType: 'VARCHAR(1000)' },
-      { sparkType: 'STRING(2000)', dbType: 'TEXT' },
-      { sparkType: 'DECIMAL(24,6)', dbType: 'DECIMAL(24,6)' },
-      { sparkType: 'DECIMAL(18,2)', dbType: 'DECIMAL(18,2)' },
-      { sparkType: 'DATE', dbType: 'DATE' },
-      { sparkType: 'TIMESTAMP', dbType: 'TIMESTAMP' },
-      { sparkType: 'INT', dbType: 'INT' },
-      { sparkType: 'BIGINT', dbType: 'BIGINT' },
-      { sparkType: 'FLOAT', dbType: 'FLOAT' },
-      { sparkType: 'DOUBLE', dbType: 'DOUBLE' },
-      { sparkType: 'BOOLEAN', dbType: 'TINYINT(1)' },
-      { sparkType: 'BINARY', dbType: 'BLOB' },
-      { sparkType: 'ARRAY<STRING>', dbType: 'JSON' },
-      { sparkType: 'ARRAY<INT>', dbType: 'JSON' },
-      { sparkType: 'MAP<STRING,STRING>', dbType: 'JSON' },
-    ],
-  },
-  starrocks: {
-    type: 'starrocks',
-    name: 'StarRocks',
-    commentSyntax: "COMMENT '{comment}'",
-    primaryKeySyntax: 'PRIMARY KEY',
-    defaultTableComment: '信用占用明细表',
-    typeMappings: [
-      { sparkType: 'STRING', dbType: 'VARCHAR(255)' },
-      { sparkType: 'STRING(500)', dbType: 'VARCHAR(500)' },
-      { sparkType: 'STRING(1000)', dbType: 'VARCHAR(1000)' },
-      { sparkType: 'STRING(2000)', dbType: 'VARCHAR(2000)' },
-      { sparkType: 'DECIMAL(24,6)', dbType: 'DECIMAL(24,6)' },
-      { sparkType: 'DECIMAL(18,2)', dbType: 'DECIMAL(18,2)' },
-      { sparkType: 'DATE', dbType: 'DATE' },
-      { sparkType: 'TIMESTAMP', dbType: 'DATETIME' },
-      { sparkType: 'INT', dbType: 'INT' },
-      { sparkType: 'BIGINT', dbType: 'BIGINT' },
-      { sparkType: 'FLOAT', dbType: 'FLOAT' },
-      { sparkType: 'DOUBLE', dbType: 'DOUBLE' },
-      { sparkType: 'BOOLEAN', dbType: 'BOOLEAN' },
-      { sparkType: 'BINARY', dbType: 'VARCHAR(255)' },
-      { sparkType: 'ARRAY<STRING>', dbType: 'ARRAY<STRING>' },
-      { sparkType: 'ARRAY<INT>', dbType: 'ARRAY<INT>' },
-      { sparkType: 'MAP<STRING,STRING>', dbType: 'MAP<STRING,STRING>' },
-      { sparkType: 'JSON', dbType: 'JSON' },
-    ],
-  },
-};
-
 function parseSQLFields(sql: string): FieldInfo[] {
   const fields: FieldInfo[] = [];
 
@@ -385,7 +292,7 @@ function inferFieldType(fieldName: string, customRules?: TypeRule[]): string {
     name.includes('days') ||
     (name.includes('day') && name !== 'weekday')
   ) {
-    return 'DECIMAL(24,6)';
+    return 'DECIMAL(24, 6)';
   }
 
   // 金额字段（包含amount、金额、price、金额相关的字段）
@@ -402,7 +309,7 @@ function inferFieldType(fieldName: string, customRules?: TypeRule[]): string {
     name.includes('totl') || // 总计
     name.includes('ocpt')    // 占用
   ) {
-    return 'DECIMAL(24,6)';
+    return 'DECIMAL(24, 6)';
   }
 
   // 数量字段
@@ -413,55 +320,25 @@ function inferFieldType(fieldName: string, customRules?: TypeRule[]): string {
     name.includes('cnt') ||
     name.includes('count')
   ) {
-    return 'DECIMAL(24,6)';
+    return 'DECIMAL(24, 6)';
   }
 
   // 默认使用STRING
   return 'STRING';
 }
 
-function mapType(sparkType: string, typeMappings: TypeMapping[]): string {
-  // 精确匹配
-  const exactMatch = typeMappings.find(m => m.sparkType === sparkType);
-  if (exactMatch) {
-    return exactMatch.dbType;
-  }
-
-  // 模糊匹配（例如 STRING(500) 匹配 STRING）
-  const baseType = sparkType.split('(')[0].toUpperCase();
-  const fuzzyMatch = typeMappings.find(m => m.sparkType.toUpperCase().startsWith(baseType));
-  if (fuzzyMatch) {
-    // 如果是模糊匹配，返回映射后的类型，但保留原始的参数
-    const dbBaseType = fuzzyMatch.dbType.split('(')[0];
-    const params = sparkType.match(/\(.+\)/);
-    return params ? `${dbBaseType}${params[0]}` : fuzzyMatch.dbType;
-  }
-
-  // 默认返回原始类型
-  return sparkType;
-}
-
-function generateDDL(
-  fields: FieldInfo[],
-  databaseType: DatabaseType = 'spark',
-  customRules?: TypeRule[],
-  customTypeMappings?: TypeMapping[]
-): string {
-  const config = databaseConfigs[databaseType];
-  const typeMappings = customTypeMappings || config.typeMappings;
-
+function generateDDL(fields: FieldInfo[], customRules?: TypeRule[]): string {
   const maxNameLength = Math.max(...fields.map(f => f.name.length), 30);
   const maxTypeLength = 18;
 
   let ddl = 'CREATE TABLE IF NOT EXISTS 表名 (\n';
 
   fields.forEach((field, index) => {
-    const sparkType = inferFieldType(field.name, customRules);
-    const dbType = mapType(sparkType, typeMappings);
+    const fieldType = inferFieldType(field.name, customRules);
     const paddedName = field.name.padEnd(maxNameLength);
-    const paddedType = dbType.padEnd(maxTypeLength);
+    const paddedType = fieldType.padEnd(maxTypeLength);
 
-    const commentText = config.commentSyntax.replace('{comment}', field.comment.replace(/'/g, "''"));
+    const commentText = `COMMENT '${field.comment.replace(/'/g, "''")}'`;
 
     if (index === 0) {
       ddl += `    ${paddedName} ${paddedType} ${commentText}`;
@@ -470,7 +347,7 @@ function generateDDL(
     }
   });
 
-  ddl += `\n) COMMENT '${config.defaultTableComment}';`;
+  ddl += '\n) COMMENT \'信用占用明细表\';';
 
   return ddl;
 }
@@ -478,7 +355,7 @@ function generateDDL(
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { sql, customRules, databaseType = 'spark', typeMappings } = body;
+    const { sql, customRules } = body;
 
     if (!sql || typeof sql !== 'string') {
       return NextResponse.json(
@@ -496,7 +373,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const ddl = generateDDL(fields, databaseType as DatabaseType, customRules, typeMappings);
+    const ddl = generateDDL(fields, customRules);
 
     return NextResponse.json({ ddl });
   } catch (error) {
