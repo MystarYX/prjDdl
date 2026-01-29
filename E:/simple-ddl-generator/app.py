@@ -224,20 +224,44 @@ def parse_field_expression(expr, comment_map=None):
     return {'name': field_name, 'alias': alias, 'comment': comment}
 
 
-def infer_field_type(field_name, custom_rules=None):
-    """推断字段类型"""
+def infer_field_type(field_name, field_comment, custom_rules=None):
+    """推断字段类型 - 支持基于关键词的自定义规则"""
     name = field_name.lower()
+    comment = field_comment.lower()
 
-    if custom_rules:
-        for rule in sorted(custom_rules, key=lambda x: x['priority']):
-            for keyword in rule['keywords']:
-                if name == keyword.lower() or keyword.lower() in name:
-                    return rule['data_type']
+    # 应用自定义规则
+    if custom_rules and isinstance(custom_rules, list):
+        # 按优先级排序（数字越小优先级越高）
+        sorted_rules = sorted(custom_rules, key=lambda x: x.get('priority', 999))
 
-    # 默认规则
-    if name in ['fcytp', 'scytp', 'cytp', 'currency_type'] or '币种代码' in name:
+        for rule in sorted_rules:
+            match_type = rule.get('matchType', 'contains')
+            target_field = rule.get('targetField', 'name')  # name 或 comment
+            keywords = rule.get('keywords', [])
+
+            for keyword in keywords:
+                keyword_lower = keyword.lower()
+
+                # 确定匹配的文本
+                target_text = name if target_field == 'name' else comment
+
+                if match_type == 'equals':
+                    if target_text == keyword_lower:
+                        return rule['dataType']
+                elif match_type == 'contains':
+                    if keyword_lower in target_text:
+                        return rule['dataType']
+                elif match_type == 'regex':
+                    try:
+                        if re.search(keyword, target_text, re.IGNORECASE):
+                            return rule['dataType']
+                    except:
+                        pass
+
+    # 默认规则（兜底）
+    if name in ['fcytp', 'scytp', 'cytp', 'currency_type'] or '币种代码' in name or '币种代码' in comment:
         return 'STRING'
-    if 'mode' in name or 'code' in name or 'icode' in name:
+    if 'mode' in name or 'code' in name or 'icode' in name or '代码' in name or '编码' in name:
         return 'STRING'
     if 'date' in name or '日期' in name:
         if 'day' not in name and 'days' not in name:
@@ -248,11 +272,11 @@ def infer_field_type(field_name, custom_rules=None):
         return 'STRING'
     if any(k in name for k in ['_name', '_dscr', '_rmrk', 'name', '描述', '备注']):
         return 'STRING'
-    if 'flag' in name or name.startswith('is_') or '标记' in name:
+    if 'flag' in name or name.startswith('is_') or '标记' in name or '是否' in name:
         return 'STRING'
     if 'days' in name or ('day' in name and name != 'weekday'):
         return 'DECIMAL(24, 6)'
-    if any(k in name for k in ['amt', 'amount', 'price', 'ocy', 'rcy', 'scy', 'elmn', 'crdt', 'totl', 'ocpt', '金额']):
+    if any(k in name for k in ['amt', 'amount', 'price', 'ocy', 'rcy', 'scy', 'elmn', 'crdt', 'totl', 'ocpt', '金额', '价格']):
         return 'DECIMAL(24, 6)'
     if any(k in name for k in ['qty', 'quantity', 'cnt', 'count', '数量']):
         return 'DECIMAL(24, 6)'
@@ -306,7 +330,7 @@ def generate_ddl(fields, custom_rules, database_type):
 
     adjusted_fields = []
     for field in fields:
-        field_type = infer_field_type(field['name'], db_rules)
+        field_type = infer_field_type(field['name'], field['comment'], db_rules)
         mapped_type = map_data_type(field_type, database_type)
         adjusted_fields.append({
             'name': field['name'],
@@ -455,11 +479,16 @@ class APIHandler(SimpleHTTPRequestHandler):
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
         .error { background: #f8d7da; color: #721c24; padding: 12px; border-radius: 6px; margin-top: 10px; display: none; }
         .mapping-section { margin-bottom: 20px; border: 1px solid #ddd; border-radius: 6px; padding: 15px; }
-        .mapping-title { font-weight: 600; margin-bottom: 10px; color: #007bff; }
-        .mapping-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
-        .mapping-item { display: flex; align-items: center; gap: 8px; }
-        .mapping-item label { flex: 0 0 80px; font-weight: 500; color: #555; }
-        .mapping-item select { flex: 1; padding: 6px; border: 1px solid #ddd; border-radius: 4px; }
+        .mapping-title { font-weight: 600; margin-bottom: 15px; color: #007bff; }
+        .rule-list { display: flex; flex-direction: column; gap: 10px; }
+        .rule-item { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 80px 40px; gap: 10px; align-items: center; background: #f8f9fa; padding: 10px; border-radius: 4px; }
+        .rule-item input, .rule-item select { padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; }
+        .rule-item label { font-size: 12px; color: #666; font-weight: 500; }
+        .btn-add { background: #28a745; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px; margin-top: 10px; }
+        .btn-add:hover { background: #218838; }
+        .btn-delete { background: #dc3545; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .btn-delete:hover { background: #c82333; }
+        .rule-header { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 80px 40px; gap: 10px; margin-bottom: 10px; font-size: 12px; color: #666; font-weight: 600; }
     </style>
 </head>
 <body>
@@ -481,7 +510,7 @@ class APIHandler(SimpleHTTPRequestHandler):
         </div>
 
         <div class="card" id="mappingCard" style="display: none;">
-            <h3 class="card-title">字段类型映射规则</h3>
+            <h3 class="card-title">字段类型推断规则</h3>
             <div id="mappingContainer"></div>
         </div>
 
@@ -531,74 +560,75 @@ FROM credit_usage_detail"></textarea>
             'doris': 'Doris'
         };
 
-        const DEFAULT_MAPPINGS = {
-            'spark': {
-                'STRING': 'STRING',
-                'DECIMAL': 'DECIMAL(24, 6)',
-                'DATE': 'DATE',
-                'TIMESTAMP': 'TIMESTAMP',
-                'INT': 'BIGINT'
-            },
-            'mysql': {
-                'STRING': 'VARCHAR(255)',
-                'DECIMAL': 'DECIMAL(24, 6)',
-                'DATE': 'DATE',
-                'TIMESTAMP': 'DATETIME',
-                'INT': 'BIGINT'
-            },
-            'postgresql': {
-                'STRING': 'VARCHAR(255)',
-                'DECIMAL': 'DECIMAL(24, 6)',
-                'DATE': 'DATE',
-                'TIMESTAMP': 'TIMESTAMP',
-                'INT': 'BIGINT'
-            },
-            'starrocks': {
-                'STRING': 'VARCHAR(255)',
-                'DECIMAL': 'DECIMAL(24, 6)',
-                'DATE': 'DATE',
-                'TIMESTAMP': 'DATETIME',
-                'INT': 'BIGINT'
-            },
-            'clickhouse': {
-                'STRING': 'String',
-                'DECIMAL': 'Decimal(24, 6)',
-                'DATE': 'Date',
-                'TIMESTAMP': 'DateTime',
-                'INT': 'Int64'
-            },
-            'hive': {
-                'STRING': 'STRING',
-                'DECIMAL': 'DECIMAL(24, 6)',
-                'DATE': 'DATE',
-                'TIMESTAMP': 'TIMESTAMP',
-                'INT': 'BIGINT'
-            },
-            'doris': {
-                'STRING': 'VARCHAR(255)',
-                'DECIMAL': 'DECIMAL(24, 6)',
-                'DATE': 'DATE',
-                'TIMESTAMP': 'DATETIME',
-                'INT': 'BIGINT'
-            }
+        const ALL_TYPE_OPTIONS = {
+            'spark': ['STRING', 'VARCHAR', 'CHAR', 'DECIMAL', 'DATE', 'TIMESTAMP', 'BIGINT', 'INT', 'FLOAT', 'DOUBLE', 'BOOLEAN', 'BINARY', 'ARRAY', 'MAP', 'STRUCT'],
+            'mysql': ['TINYINT', 'SMALLINT', 'MEDIUMINT', 'INT', 'INTEGER', 'BIGINT', 'FLOAT', 'DOUBLE', 'DECIMAL', 'NUMERIC', 'DATE', 'DATETIME', 'TIMESTAMP', 'TIME', 'YEAR', 'CHAR', 'VARCHAR', 'BINARY', 'VARBINARY', 'TINYBLOB', 'BLOB', 'MEDIUMBLOB', 'LONGBLOB', 'TINYTEXT', 'TEXT', 'MEDIUMTEXT', 'LONGTEXT', 'ENUM', 'SET', 'BOOLEAN', 'JSON'],
+            'postgresql': ['SMALLINT', 'INTEGER', 'BIGINT', 'DECIMAL', 'NUMERIC', 'REAL', 'DOUBLE PRECISION', 'SMALLSERIAL', 'SERIAL', 'BIGSERIAL', 'CHARACTER', 'VARCHAR', 'TEXT', 'BYTEA', 'TIMESTAMP', 'DATE', 'TIME', 'BOOLEAN', 'UUID', 'JSON', 'JSONB', 'ARRAY'],
+            'starrocks': ['TINYINT', 'SMALLINT', 'INT', 'BIGINT', 'LARGEINT', 'FLOAT', 'DOUBLE', 'DECIMAL', 'DATE', 'DATETIME', 'CHAR', 'VARCHAR', 'STRING', 'BOOLEAN', 'JSON', 'BITMAP', 'HLL', 'PERCENTILE', 'ARRAY', 'MAP', 'STRUCT'],
+            'clickhouse': ['UInt8', 'UInt16', 'UInt32', 'UInt64', 'Int8', 'Int16', 'Int32', 'Int64', 'Float32', 'Float64', 'String', 'FixedString', 'Date', 'DateTime', 'DateTime64', 'Decimal', 'UUID', 'Enum8', 'Enum16', 'Array', 'Tuple', 'Map', 'Nested', 'Nullable', 'Bool'],
+            'hive': ['TINYINT', 'SMALLINT', 'INT', 'BIGINT', 'BOOLEAN', 'FLOAT', 'DOUBLE', 'DECIMAL', 'STRING', 'VARCHAR', 'CHAR', 'DATE', 'TIMESTAMP', 'INTERVAL', 'BINARY', 'ARRAY', 'MAP', 'STRUCT', 'UNIONTYPE'],
+            'doris': ['TINYINT', 'SMALLINT', 'INT', 'BIGINT', 'LARGEINT', 'FLOAT', 'DOUBLE', 'DECIMAL', 'DATE', 'DATETIME', 'CHAR', 'VARCHAR', 'STRING', 'BOOLEAN', 'JSON', 'BITMAP', 'HLL', 'PERCENTILE', 'ARRAY', 'MAP', 'STRUCT']
         };
 
-        const TYPE_OPTIONS = {
-            'spark': ['STRING', 'VARCHAR(255)', 'DECIMAL(24, 6)', 'DATE', 'TIMESTAMP', 'BIGINT', 'INT', 'FLOAT', 'DOUBLE', 'BOOLEAN'],
-            'mysql': ['VARCHAR(255)', 'CHAR(1)', 'TEXT', 'DECIMAL(24, 6)', 'DATE', 'DATETIME', 'TIMESTAMP', 'BIGINT', 'INT', 'FLOAT', 'DOUBLE', 'BOOLEAN'],
-            'postgresql': ['VARCHAR(255)', 'CHAR(1)', 'TEXT', 'DECIMAL(24, 6)', 'DATE', 'TIMESTAMP', 'BIGINT', 'INTEGER', 'REAL', 'DOUBLE PRECISION', 'BOOLEAN'],
-            'starrocks': ['VARCHAR(255)', 'CHAR(1)', 'DECIMAL(24, 6)', 'DATE', 'DATETIME', 'BIGINT', 'INT', 'FLOAT', 'DOUBLE', 'BOOLEAN'],
-            'clickhouse': ['String', 'Decimal(24, 6)', 'Date', 'DateTime', 'Int64', 'Int32', 'Float64', 'Float32', 'Bool'],
-            'hive': ['STRING', 'VARCHAR(255)', 'DECIMAL(24, 6)', 'DATE', 'TIMESTAMP', 'BIGINT', 'INT', 'FLOAT', 'DOUBLE', 'BOOLEAN'],
-            'doris': ['VARCHAR(255)', 'CHAR(1)', 'DECIMAL(24, 6)', 'DATE', 'DATETIME', 'BIGINT', 'INT', 'FLOAT', 'DOUBLE', 'BOOLEAN']
+        const DEFAULT_RULES = {
+            'spark': [
+                { keywords: ['amt', 'amount', 'price', '金额', '价格'], matchType: 'contains', targetField: 'name', dataType: 'DECIMAL(24, 6)', priority: 1 },
+                { keywords: ['date', '日期'], matchType: 'contains', targetField: 'name', dataType: 'DATE', priority: 1 },
+                { keywords: ['time', 'timestamp', '时间'], matchType: 'contains', targetField: 'name', dataType: 'TIMESTAMP', priority: 1 },
+                { keywords: ['id', 'icode'], matchType: 'contains', targetField: 'name', dataType: 'STRING', priority: 1 },
+                { keywords: ['name', '名称', '描述', '备注'], matchType: 'contains', targetField: 'name', dataType: 'STRING', priority: 1 }
+            ],
+            'mysql': [
+                { keywords: ['amt', 'amount', 'price', '金额', '价格'], matchType: 'contains', targetField: 'name', dataType: 'DECIMAL(24, 6)', priority: 1 },
+                { keywords: ['date', '日期'], matchType: 'contains', targetField: 'name', dataType: 'DATE', priority: 1 },
+                { keywords: ['time', 'timestamp', '时间'], matchType: 'contains', targetField: 'name', dataType: 'DATETIME', priority: 1 },
+                { keywords: ['id', 'icode'], matchType: 'contains', targetField: 'name', dataType: 'BIGINT', priority: 1 },
+                { keywords: ['name', '名称', '描述', '备注'], matchType: 'contains', targetField: 'name', dataType: 'VARCHAR(255)', priority: 1 }
+            ],
+            'postgresql': [
+                { keywords: ['amt', 'amount', 'price', '金额', '价格'], matchType: 'contains', targetField: 'name', dataType: 'DECIMAL(24, 6)', priority: 1 },
+                { keywords: ['date', '日期'], matchType: 'contains', targetField: 'name', dataType: 'DATE', priority: 1 },
+                { keywords: ['time', 'timestamp', '时间'], matchType: 'contains', targetField: 'name', dataType: 'TIMESTAMP', priority: 1 },
+                { keywords: ['id', 'icode'], matchType: 'contains', targetField: 'name', dataType: 'BIGINT', priority: 1 },
+                { keywords: ['name', '名称', '描述', '备注'], matchType: 'contains', targetField: 'name', dataType: 'VARCHAR(255)', priority: 1 }
+            ],
+            'starrocks': [
+                { keywords: ['amt', 'amount', 'price', '金额', '价格'], matchType: 'contains', targetField: 'name', dataType: 'DECIMAL(24, 6)', priority: 1 },
+                { keywords: ['date', '日期'], matchType: 'contains', targetField: 'name', dataType: 'DATE', priority: 1 },
+                { keywords: ['time', 'timestamp', '时间'], matchType: 'contains', targetField: 'name', dataType: 'DATETIME', priority: 1 },
+                { keywords: ['id', 'icode'], matchType: 'contains', targetField: 'name', dataType: 'BIGINT', priority: 1 },
+                { keywords: ['name', '名称', '描述', '备注'], matchType: 'contains', targetField: 'name', dataType: 'VARCHAR(255)', priority: 1 }
+            ],
+            'clickhouse': [
+                { keywords: ['amt', 'amount', 'price', '金额', '价格'], matchType: 'contains', targetField: 'name', dataType: 'Decimal(24, 6)', priority: 1 },
+                { keywords: ['date', '日期'], matchType: 'contains', targetField: 'name', dataType: 'Date', priority: 1 },
+                { keywords: ['time', 'timestamp', '时间'], matchType: 'contains', targetField: 'name', dataType: 'DateTime', priority: 1 },
+                { keywords: ['id', 'icode'], matchType: 'contains', targetField: 'name', dataType: 'Int64', priority: 1 },
+                { keywords: ['name', '名称', '描述', '备注'], matchType: 'contains', targetField: 'name', dataType: 'String', priority: 1 }
+            ],
+            'hive': [
+                { keywords: ['amt', 'amount', 'price', '金额', '价格'], matchType: 'contains', targetField: 'name', dataType: 'DECIMAL(24, 6)', priority: 1 },
+                { keywords: ['date', '日期'], matchType: 'contains', targetField: 'name', dataType: 'DATE', priority: 1 },
+                { keywords: ['time', 'timestamp', '时间'], matchType: 'contains', targetField: 'name', dataType: 'TIMESTAMP', priority: 1 },
+                { keywords: ['id', 'icode'], matchType: 'contains', targetField: 'name', dataType: 'BIGINT', priority: 1 },
+                { keywords: ['name', '名称', '描述', '备注'], matchType: 'contains', targetField: 'name', dataType: 'STRING', priority: 1 }
+            ],
+            'doris': [
+                { keywords: ['amt', 'amount', 'price', '金额', '价格'], matchType: 'contains', targetField: 'name', dataType: 'DECIMAL(24, 6)', priority: 1 },
+                { keywords: ['date', '日期'], matchType: 'contains', targetField: 'name', dataType: 'DATE', priority: 1 },
+                { keywords: ['time', 'timestamp', '时间'], matchType: 'contains', targetField: 'name', dataType: 'DATETIME', priority: 1 },
+                { keywords: ['id', 'icode'], matchType: 'contains', targetField: 'name', dataType: 'BIGINT', priority: 1 },
+                { keywords: ['name', '名称', '描述', '备注'], matchType: 'contains', targetField: 'name', dataType: 'VARCHAR(255)', priority: 1 }
+            ]
         };
+
+        let customRules = JSON.parse(JSON.stringify(DEFAULT_RULES));
 
         document.getElementById('sqlInput').addEventListener('input', function() {
             document.getElementById('charCount').textContent = this.value.length + ' 字符';
         });
 
         function toggleMapping(dbType) {
-            const checkbox = document.querySelector(`input[value="${dbType}"]`);
             renderMappings();
         }
 
@@ -618,62 +648,115 @@ FROM credit_usage_detail"></textarea>
             checkedDbs.forEach(dbType => {
                 const section = document.createElement('div');
                 section.className = 'mapping-section';
-                section.innerHTML = `
-                    <div class="mapping-title">${DB_LABELS[dbType]} 字段类型映射</div>
-                    <div class="mapping-grid">
-                        <div class="mapping-item">
-                            <label>STRING</label>
-                            <select id="mapping_${dbType}_STRING" data-db="${dbType}" data-type="STRING">
-                                ${TYPE_OPTIONS[dbType].map(opt => `<option value="${opt}" ${DEFAULT_MAPPINGS[dbType]['STRING'] === opt ? 'selected' : ''}>${opt}</option>`).join('')}
-                            </select>
-                        </div>
-                        <div class="mapping-item">
-                            <label>DECIMAL</label>
-                            <select id="mapping_${dbType}_DECIMAL" data-db="${dbType}" data-type="DECIMAL">
-                                ${TYPE_OPTIONS[dbType].filter(opt => opt.includes('DECIMAL') || opt.includes('Decimal')).map(opt => `<option value="${opt}" ${DEFAULT_MAPPINGS[dbType]['DECIMAL'] === opt ? 'selected' : ''}>${opt}</option>`).join('')}
-                            </select>
-                        </div>
-                        <div class="mapping-item">
-                            <label>DATE</label>
-                            <select id="mapping_${dbType}_DATE" data-db="${dbType}" data-type="DATE">
-                                ${TYPE_OPTIONS[dbType].filter(opt => opt.includes('DATE') || opt.includes('Date')).map(opt => `<option value="${opt}" ${DEFAULT_MAPPINGS[dbType]['DATE'] === opt ? 'selected' : ''}>${opt}</option>`).join('')}
-                            </select>
-                        </div>
-                        <div class="mapping-item">
-                            <label>TIMESTAMP</label>
-                            <select id="mapping_${dbType}_TIMESTAMP" data-db="${dbType}" data-type="TIMESTAMP">
-                                ${TYPE_OPTIONS[dbType].filter(opt => opt.includes('TIMESTAMP') || opt.includes('TIMESTAMP') || opt.includes('DATETIME') || opt.includes('DateTime')).map(opt => `<option value="${opt}" ${DEFAULT_MAPPINGS[dbType]['TIMESTAMP'] === opt ? 'selected' : ''}>${opt}</option>`).join('')}
-                            </select>
-                        </div>
-                        <div class="mapping-item">
-                            <label>INT</label>
-                            <select id="mapping_${dbType}_INT" data-db="${dbType}" data-type="INT">
-                                ${TYPE_OPTIONS[dbType].filter(opt => opt.includes('INT') || opt.includes('Int')).map(opt => `<option value="${opt}" ${DEFAULT_MAPPINGS[dbType]['INT'] === opt ? 'selected' : ''}>${opt}</option>`).join('')}
-                            </select>
-                        </div>
+
+                const rules = customRules[dbType] || [];
+                const typeOptions = ALL_TYPE_OPTIONS[dbType];
+
+                let rulesHtml = `
+                    <div class="mapping-title">${DB_LABELS[dbType]} 字段类型推断规则</div>
+                    <div class="rule-header">
+                        <div>关键词（逗号分隔）</div>
+                        <div>匹配方式</div>
+                        <div>匹配字段</div>
+                        <div>目标类型</div>
+                        <div>优先级</div>
+                        <div></div>
                     </div>
+                    <div class="rule-list" id="rules_${dbType}">
                 `;
+
+                rules.forEach((rule, index) => {
+                    rulesHtml += `
+                        <div class="rule-item" data-index="${index}">
+                            <div>
+                                <label>关键词</label>
+                                <input type="text" value="${rule.keywords.join(', ')}" data-field="keywords" placeholder="amt, amount">
+                            </div>
+                            <div>
+                                <label>匹配方式</label>
+                                <select data-field="matchType">
+                                    <option value="contains" ${rule.matchType === 'contains' ? 'selected' : ''}>包含</option>
+                                    <option value="equals" ${rule.matchType === 'equals' ? 'selected' : ''}>等于</option>
+                                    <option value="regex" ${rule.matchType === 'regex' ? 'selected' : ''}>正则</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label>匹配字段</label>
+                                <select data-field="targetField">
+                                    <option value="name" ${rule.targetField === 'name' ? 'selected' : ''}>字段名</option>
+                                    <option value="comment" ${rule.targetField === 'comment' ? 'selected' : ''}>字段注释</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label>目标类型</label>
+                                <select data-field="dataType">
+                                    ${typeOptions.map(opt => `<option value="${opt}" ${rule.dataType === opt ? 'selected' : ''}>${opt}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div>
+                                <label>优先级</label>
+                                <input type="number" value="${rule.priority}" data-field="priority" min="0" max="999">
+                            </div>
+                            <div>
+                                <button class="btn-delete" onclick="deleteRule('${dbType}', ${index})">删除</button>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                rulesHtml += `
+                    </div>
+                    <button class="btn-add" onclick="addRule('${dbType}')">+ 添加规则</button>
+                `;
+
+                section.innerHTML = rulesHtml;
                 mappingContainer.appendChild(section);
             });
         }
 
-        function getCustomMappings() {
-            const rulesByDatabase = {};
-            const selects = document.querySelectorAll('.mapping-grid select');
+        function addRule(dbType) {
+            if (!customRules[dbType]) {
+                customRules[dbType] = [];
+            }
+            customRules[dbType].push({
+                keywords: [],
+                matchType: 'contains',
+                targetField: 'name',
+                dataType: 'STRING',
+                priority: 999
+            });
+            renderMappings();
+        }
 
-            selects.forEach(select => {
-                const dbType = select.dataset.db;
-                const type = select.dataset.type;
-                const value = select.value;
+        function deleteRule(dbType, index) {
+            customRules[dbType].splice(index, 1);
+            renderMappings();
+        }
 
-                if (!rulesByDatabase[dbType]) {
-                    rulesByDatabase[dbType] = {};
-                }
+        function getCustomRules() {
+            const ruleItems = document.querySelectorAll('.rule-item');
+            ruleItems.forEach(item => {
+                const dbType = item.closest('.mapping-section').querySelector('.rule-list').id.replace('rules_', '');
+                const index = parseInt(item.dataset.index);
 
-                rulesByDatabase[dbType][type] = value;
+                const keywordInput = item.querySelector('[data-field="keywords"]');
+                const matchTypeSelect = item.querySelector('[data-field="matchType"]');
+                const targetFieldSelect = item.querySelector('[data-field="targetField"]');
+                const dataTypeSelect = item.querySelector('[data-field="dataType"]');
+                const priorityInput = item.querySelector('[data-field="priority"]');
+
+                const keywords = keywordInput.value.split(',').map(k => k.trim()).filter(k => k);
+
+                customRules[dbType][index] = {
+                    keywords: keywords,
+                    matchType: matchTypeSelect.value,
+                    targetField: targetFieldSelect.value,
+                    dataType: dataTypeSelect.value,
+                    priority: parseInt(priorityInput.value) || 999
+                };
             });
 
-            return rulesByDatabase;
+            return customRules;
         }
 
         // 初始化映射区域
@@ -702,11 +785,11 @@ FROM credit_usage_detail"></textarea>
             generateBtn.textContent = '生成中...';
 
             try {
-                const customMappings = getCustomMappings();
+                const customRulesData = getCustomRules();
                 const response = await fetch('/api/generate-ddl', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sql, rulesByDatabase: customMappings, databaseTypes: dbTypes })
+                    body: JSON.stringify({ sql, rulesByDatabase: customRulesData, databaseTypes: dbTypes })
                 });
 
                 const data = await response.json();
