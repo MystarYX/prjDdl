@@ -1,16 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Play, Copy, Download, Settings2, Database, Code2, RefreshCw, Plus, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
+import { Play, Copy, Download, Settings2, Database, Code2, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface FieldTypeInfo {
@@ -135,6 +131,28 @@ const DEFAULT_RULES: UnifiedRule[] = [
   },
 ];
 
+// 从localStorage加载规则
+function loadRules(): UnifiedRule[] {
+  if (typeof window === 'undefined') return DEFAULT_RULES;
+  try {
+    const saved = localStorage.getItem('ddl-rules');
+    return saved ? JSON.parse(saved) : DEFAULT_RULES;
+  } catch {
+    return DEFAULT_RULES;
+  }
+}
+
+// 从localStorage加载选中的数据库
+function loadSelectedDatabases(): string[] {
+  if (typeof window === 'undefined') return ['spark', 'mysql', 'clickhouse'];
+  try {
+    const saved = localStorage.getItem('ddl-selected-databases');
+    return saved ? JSON.parse(saved) : ['spark', 'mysql', 'clickhouse'];
+  } catch {
+    return ['spark', 'mysql', 'clickhouse'];
+  }
+}
+
 const EXAMPLE_SQL = `-- 账户信息表查询
 SELECT
   icode,
@@ -162,7 +180,17 @@ export default function Home() {
   const [selectedDatabases, setSelectedDatabases] = useState<string[]>(['spark', 'mysql', 'clickhouse']);
   const [generatedDDL, setGeneratedDDL] = useState<{ ddl?: string; ddls?: Array<{ label: string; ddl: string }> }>({});
   const [loading, setLoading] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  useEffect(() => {
+    const saved = loadRules();
+    setUnifiedRules(saved);
+    const savedDbs = loadSelectedDatabases();
+    setSelectedDatabases(savedDbs);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('ddl-selected-databases', JSON.stringify(selectedDatabases));
+  }, [selectedDatabases]);
 
   async function generate() {
     setLoading(true);
@@ -201,76 +229,6 @@ export default function Home() {
     a.click();
   }
 
-  function addRule() {
-    const newRule: UnifiedRule = {
-      id: Date.now().toString(),
-      keywords: [''],
-      matchType: 'contains',
-      targetField: 'name',
-      priority: unifiedRules.length + 1,
-      typeByDatabase: selectedDatabases.reduce((acc, db) => {
-        acc[db] = { dataType: 'STRING' };
-        return acc;
-      }, {} as Record<string, FieldTypeInfo>),
-    };
-    setUnifiedRules([...unifiedRules, newRule]);
-  }
-
-  function updateRule(id: string, field: keyof UnifiedRule, value: any) {
-    setUnifiedRules(rules => rules.map(rule => rule.id === id ? { ...rule, [field]: value } : rule));
-  }
-
-  function updateRuleDbType(ruleId: string, dbType: string, field: string, value: any) {
-    setUnifiedRules(rules => rules.map(rule => {
-      if (rule.id === ruleId) {
-        return {
-          ...rule,
-          typeByDatabase: {
-            ...rule.typeByDatabase,
-            [dbType]: { ...rule.typeByDatabase[dbType], [field]: value }
-          }
-        };
-      }
-      return rule;
-    }));
-  }
-
-  function deleteRule(id: string) {
-    setUnifiedRules(rules => rules.filter(rule => rule.id !== id));
-  }
-
-  function moveRule(index: number, direction: 'up' | 'down') {
-    const newRules = [...unifiedRules];
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= newRules.length) return;
-    [newRules[index], newRules[targetIndex]] = [newRules[targetIndex], newRules[index]];
-    setUnifiedRules(newRules);
-  }
-
-  function resetRules() {
-    setUnifiedRules(DEFAULT_RULES);
-    toast({ title: '已重置', description: '规则已恢复为默认值' });
-  }
-
-  const DATA_TYPE_OPTIONS = [
-    'STRING', 'VARCHAR', 'TEXT', 'CHAR',
-    'DECIMAL', 'FLOAT', 'DOUBLE', 'INT', 'BIGINT',
-    'DATE', 'DATETIME', 'TIMESTAMP', 'BOOLEAN',
-    'String', 'Decimal', 'DateTime', 'Date'
-  ];
-
-  // 检查类型是否需要精度参数
-  const needsPrecision = (dataType: string) => {
-    const upper = dataType.toUpperCase();
-    return upper === 'DECIMAL' || upper === 'FLOAT' || upper === 'DOUBLE';
-  };
-
-  // 检查类型是否需要长度参数
-  const needsLength = (dataType: string) => {
-    const upper = dataType.toUpperCase();
-    return upper === 'VARCHAR' || upper === 'CHAR';
-  };
-
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       <div className="container mx-auto p-6 space-y-6">
@@ -284,203 +242,12 @@ export default function Home() {
               <RefreshCw className="w-4 h-4 mr-2" />
               示例SQL
             </Button>
-            <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline">
-                  <Settings2 className="w-4 h-4 mr-2" />
-                  规则设置
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-[95vw] h-[90vh] p-0 overflow-hidden flex flex-col">
-                <DialogHeader className="px-6 py-4 border-b">
-                  <DialogTitle className="text-xl font-bold">字段类型推断规则</DialogTitle>
-                  <DialogDescription>配置字段名称匹配规则及在不同数据库中的类型映射</DialogDescription>
-                </DialogHeader>
-
-                <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
-                  <div className="space-y-6">
-                    {unifiedRules.map((rule, index) => (
-                      <Card key={rule.id} className="border border-slate-200 bg-white">
-                        <CardContent className="p-5">
-                          {/* 规则头部 */}
-                          <div className="flex items-center justify-between mb-5">
-                            <div className="flex items-center gap-3">
-                              <Badge variant="secondary">优先级 {rule.priority}</Badge>
-                              <div className="flex gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 w-8 p-0"
-                                  onClick={() => moveRule(index, 'up')}
-                                  disabled={index === 0}
-                                >
-                                  <ChevronUp className="w-4 h-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 w-8 p-0"
-                                  onClick={() => moveRule(index, 'down')}
-                                  disabled={index === unifiedRules.length - 1}
-                                >
-                                  <ChevronDown className="w-4 h-4" />
-                                </Button>
-                              </div>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => deleteRule(rule.id)}
-                              className="text-red-500 hover:text-red-600 hover:bg-red-50 h-8"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-
-                          {/* 基本配置 */}
-                          <div className="grid grid-cols-12 gap-4 mb-5">
-                            <div className="col-span-5">
-                              <Label className="text-sm font-medium text-slate-700 mb-1.5 block">关键词</Label>
-                              <Input
-                                value={rule.keywords.join(', ')}
-                                onChange={e => updateRule(rule.id, 'keywords', e.target.value.split(',').map(k => k.trim()))}
-                                placeholder="amt, amount, 金额"
-                                className="h-9"
-                              />
-                            </div>
-                            <div className="col-span-2">
-                              <Label className="text-sm font-medium text-slate-700 mb-1.5 block">优先级</Label>
-                              <Input
-                                type="number"
-                                value={rule.priority}
-                                onChange={e => updateRule(rule.id, 'priority', parseInt(e.target.value))}
-                                min={1}
-                                className="h-9"
-                              />
-                            </div>
-                            <div className="col-span-3">
-                              <Label className="text-sm font-medium text-slate-700 mb-1.5 block">匹配方式</Label>
-                              <Select
-                                value={rule.matchType}
-                                onValueChange={(v: 'contains' | 'equals' | 'regex') => updateRule(rule.id, 'matchType', v)}
-                              >
-                                <SelectTrigger className="h-9">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="contains">包含</SelectItem>
-                                  <SelectItem value="equals">等于</SelectItem>
-                                  <SelectItem value="regex">正则</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="col-span-2">
-                              <Label className="text-sm font-medium text-slate-700 mb-1.5 block">匹配字段</Label>
-                              <Select
-                                value={rule.targetField}
-                                onValueChange={(v: 'name' | 'comment') => updateRule(rule.id, 'targetField', v)}
-                              >
-                                <SelectTrigger className="h-9">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="name">字段名</SelectItem>
-                                  <SelectItem value="comment">字段注释</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-
-                          {/* 数据库类型映射 */}
-                          <div>
-                            <Label className="text-sm font-medium text-slate-700 mb-3 block">数据库类型映射</Label>
-                            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                              {selectedDatabases.map(dbType => {
-                                const dbConfig = rule.typeByDatabase[dbType];
-                                if (!dbConfig) return null;
-                                const dbLabel = DATABASE_TYPES.find(d => d.value === dbType)?.label || dbType;
-                                const isDecimal = needsPrecision(dbConfig.dataType);
-                                const isVarchar = needsLength(dbConfig.dataType);
-
-                                return (
-                                  <div key={dbType} className="border rounded-lg p-4 bg-slate-50 space-y-3">
-                                    <div className="text-sm font-semibold text-slate-700">{dbLabel}</div>
-
-                                    <Select
-                                      value={dbConfig.dataType}
-                                      onValueChange={(v: string) => updateRuleDbType(rule.id, dbType, 'dataType', v)}
-                                    >
-                                      <SelectTrigger className="h-9">
-                                        <SelectValue />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {DATA_TYPE_OPTIONS.map(type => (
-                                          <SelectItem key={type} value={type}>{type}</SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-
-                                    {isDecimal && (
-                                      <div className="flex gap-2">
-                                        <div className="flex-1">
-                                          <Label className="text-xs text-slate-500 mb-1 block">精度</Label>
-                                          <Input
-                                            type="number"
-                                            value={dbConfig.precision ?? ''}
-                                            onChange={e => updateRuleDbType(rule.id, dbType, 'precision', e.target.value ? parseInt(e.target.value) : undefined)}
-                                            className="h-9"
-                                            placeholder="24"
-                                          />
-                                        </div>
-                                        <div className="flex-1">
-                                          <Label className="text-xs text-slate-500 mb-1 block">小数位</Label>
-                                          <Input
-                                            type="number"
-                                            value={dbConfig.scale ?? ''}
-                                            onChange={e => updateRuleDbType(rule.id, dbType, 'scale', e.target.value ? parseInt(e.target.value) : undefined)}
-                                            className="h-9"
-                                            placeholder="6"
-                                          />
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {isVarchar && (
-                                      <div>
-                                        <Label className="text-xs text-slate-500 mb-1 block">长度</Label>
-                                        <Input
-                                          type="number"
-                                          value={dbConfig.length ?? ''}
-                                          onChange={e => updateRuleDbType(rule.id, dbType, 'length', e.target.value ? parseInt(e.target.value) : undefined)}
-                                          className="h-9"
-                                          placeholder="255"
-                                        />
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </div>
-
-                <DialogFooter className="px-6 py-4 border-t bg-white gap-3">
-                  <Button variant="outline" onClick={addRule} className="flex-1">
-                    <Plus className="w-4 h-4 mr-2" />
-                    添加规则
-                  </Button>
-                  <Button variant="outline" onClick={resetRules}>
-                    <RefreshCw className="w-4 h-4 mr-2" />
-                    重置默认
-                  </Button>
-                  <Button onClick={() => setSettingsOpen(false)}>确定</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+            <Link href="/rules">
+              <Button variant="outline">
+                <Settings2 className="w-4 h-4 mr-2" />
+                规则设置
+              </Button>
+            </Link>
           </div>
         </div>
 
