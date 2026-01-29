@@ -153,6 +153,12 @@ function loadSelectedDatabases(): string[] {
   }
 }
 
+// 保存选中的数据库到localStorage
+function saveSelectedDatabases(dbs: string[]) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('ddl-selected-databases', JSON.stringify(dbs));
+}
+
 const EXAMPLE_SQL = `-- 账户信息表查询
 SELECT
   icode,
@@ -181,15 +187,17 @@ export default function Home() {
   const [generatedDDL, setGeneratedDDL] = useState<{ ddl?: string; ddls?: Array<{ label: string; ddl: string }> }>({});
   const [loading, setLoading] = useState(false);
 
+  // 初始化加载
   useEffect(() => {
-    const saved = loadRules();
-    setUnifiedRules(saved);
+    const savedRules = loadRules();
     const savedDbs = loadSelectedDatabases();
+    setUnifiedRules(savedRules);
     setSelectedDatabases(savedDbs);
   }, []);
 
+  // 数据库选择变化时自动保存
   useEffect(() => {
-    localStorage.setItem('ddl-selected-databases', JSON.stringify(selectedDatabases));
+    saveSelectedDatabases(selectedDatabases);
   }, [selectedDatabases]);
 
   async function generate() {
