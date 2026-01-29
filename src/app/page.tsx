@@ -182,20 +182,20 @@ export default function Home() {
 
     rules.forEach(rule => {
       rule.targetDatabases.forEach(dbType => {
-        const baseType = rule.dataTypes[dbType] || rule.dataTypes['spark'];
-        const params = rule.typeParams[dbType] || {};
-        
+        const baseType = rule.dataTypes[dbType as keyof typeof rule.dataTypes] || rule.dataTypes['spark' as keyof typeof rule.dataTypes];
+        const params = rule.typeParams[dbType as keyof typeof rule.typeParams] || {};
+
         // 构建带参数的完整类型字符串
         let fullType = baseType;
         const upper = baseType.toUpperCase();
 
-        if (params.precision !== undefined && params.scale !== undefined && 
+        if (params.precision !== undefined && params.scale !== undefined &&
             (upper.includes('DECIMAL') || upper.includes('NUMERIC'))) {
           fullType = `${baseType}(${params.precision}, ${params.scale})`;
-        } else if (params.length !== undefined && 
+        } else if (params.length !== undefined &&
                    (upper.includes('VARCHAR') || upper.includes('CHAR'))) {
           fullType = `${baseType}(${params.length})`;
-        } else if (params.precision !== undefined && 
+        } else if (params.precision !== undefined &&
                    (upper.includes('FLOAT') || upper.includes('DOUBLE'))) {
           fullType = `${baseType}(${params.precision})`;
         }
@@ -328,11 +328,11 @@ export default function Home() {
   };
 
   const renderTypeParams = (rule: GlobalRule, dbType: string) => {
-    const dataType = rule.dataTypes[dbType];
+    const dataType = rule.dataTypes[dbType as keyof typeof rule.dataTypes];
     if (!dataType) return null;
-    
+
     const upper = dataType.toUpperCase();
-    const params = rule.typeParams[dbType] || {};
+    const params = rule.typeParams[dbType as keyof typeof rule.typeParams] || {};
 
     if (!hasTypeParams(dataType)) return null;
 
@@ -486,7 +486,7 @@ export default function Home() {
               <div className="bg-white rounded-xl p-6 shadow-sm">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="font-semibold text-gray-800">
-                    {selectedDbTypes.length > 1 ? '建表语句' : DB_LABELS[selectedDbTypes[0]] + ' 建表语句'}
+                    {selectedDbTypes.length > 1 ? '建表语句' : (DB_LABELS[selectedDbTypes[0] as keyof typeof DB_LABELS] || '建表语句')}
                   </h3>
                   <button
                     onClick={handleCopy}
