@@ -225,7 +225,7 @@ def parse_field_expression(expr, comment_map=None):
 
 
 def infer_field_type(field_name, field_comment, custom_rules=None):
-    """推断字段类型 - 支持基于关键词的自定义规则"""
+    """推断字段类型 - 支持基于关键词的自定义规则，返回类型和参数"""
     name = field_name.lower()
     comment = field_comment.lower()
 
@@ -247,60 +247,143 @@ def infer_field_type(field_name, field_comment, custom_rules=None):
 
                 if match_type == 'equals':
                     if target_text == keyword_lower:
-                        return rule['dataType']
+                        return {
+                            'type': rule['dataType'],
+                            'precision': rule.get('precision'),
+                            'scale': rule.get('scale'),
+                            'length': rule.get('length')
+                        }
                 elif match_type == 'contains':
                     if keyword_lower in target_text:
-                        return rule['dataType']
+                        return {
+                            'type': rule['dataType'],
+                            'precision': rule.get('precision'),
+                            'scale': rule.get('scale'),
+                            'length': rule.get('length')
+                        }
                 elif match_type == 'regex':
                     try:
                         if re.search(keyword, target_text, re.IGNORECASE):
-                            return rule['dataType']
+                            return {
+                                'type': rule['dataType'],
+                                'precision': rule.get('precision'),
+                                'scale': rule.get('scale'),
+                                'length': rule.get('length')
+                            }
                     except:
                         pass
 
     # 默认规则（兜底）
     if name in ['fcytp', 'scytp', 'cytp', 'currency_type'] or '币种代码' in name or '币种代码' in comment:
-        return 'STRING'
+        return {'type': 'STRING'}
     if 'mode' in name or 'code' in name or 'icode' in name or '代码' in name or '编码' in name:
-        return 'STRING'
+        return {'type': 'STRING'}
     if 'date' in name or '日期' in name:
         if 'day' not in name and 'days' not in name:
-            return 'DATE'
+            return {'type': 'DATE'}
     if 'time' in name or 'timestamp' in name or '时间' in name:
-        return 'TIMESTAMP'
+        return {'type': 'TIMESTAMP'}
     if any(k in name for k in ['org', 'trcl', 'cust', 'stff', 'user', 'dept']):
-        return 'STRING'
+        return {'type': 'STRING'}
     if any(k in name for k in ['_name', '_dscr', '_rmrk', 'name', '描述', '备注']):
-        return 'STRING'
+        return {'type': 'STRING'}
     if 'flag' in name or name.startswith('is_') or '标记' in name or '是否' in name:
-        return 'STRING'
+        return {'type': 'STRING'}
     if 'days' in name or ('day' in name and name != 'weekday'):
-        return 'DECIMAL(24, 6)'
+        return {'type': 'DECIMAL', 'precision': 24, 'scale': 6}
     if any(k in name for k in ['amt', 'amount', 'price', 'ocy', 'rcy', 'scy', 'elmn', 'crdt', 'totl', 'ocpt', '金额', '价格']):
-        return 'DECIMAL(24, 6)'
+        return {'type': 'DECIMAL', 'precision': 24, 'scale': 6}
     if any(k in name for k in ['qty', 'quantity', 'cnt', 'count', '数量']):
-        return 'DECIMAL(24, 6)'
+        return {'type': 'DECIMAL', 'precision': 24, 'scale': 6}
 
-    return 'STRING'
+    return {'type': 'STRING'}
 
 
-def map_data_type(data_type, database_type):
-    """类型映射"""
+def map_data_type(type_info, database_type):
+    """类型映射 - 支持类型参数"""
+    if isinstance(type_info, str):
+        # 兼容旧版本：直接返回字符串
+        data_type = type_info
+        precision = None
+        scale = None
+        length = None
+    else:
+        # 新版本：处理类型对象
+        data_type = type_info.get('type', 'STRING')
+        precision = type_info.get('precision')
+        scale = type_info.get('scale')
+        length = type_info.get('length')
+
+    # 构建带参数的类型字符串
+    result_type = data_type.upper()
+
     if database_type == 'clickhouse':
-        if data_type == 'STRING':
+        if result_type == 'STRING':
             return 'String'
-        if data_type == 'DATE':
+        if result_type == 'DATE':
             return 'Date'
-        if data_type == 'TIMESTAMP':
+        if result_type == 'TIMESTAMP':
             return 'DateTime'
-        if data_type.startswith('DECIMAL'):
-            return data_type.replace('DECIMAL', 'Decimal')
-    if database_type == 'postgresql':
-        if data_type == 'STRING':
+        if result_type.startswith('DECIMAL'):
+            base_type = result_type.replace('DECIMAL', 'Decimal')
+            if precision and scale:
+                return f"{base_type}({precision}, {scale})"
+            return base_type
+        if result_type.startswith('FLOAT'):
+            if precision:
+                return f"Float{precision}"
+            return 'Float64'
+        if result_type.startswith('DOUBLE'):
+            return 'Float64'
+        if result_type in ['VARCHAR', 'CHAR']:
+            return 'String'  # ClickHouse 使用 String 代替 VARCHAR/CHAR
+    elif database_type == 'postgresql':
+        if result_type == 'STRING':
             return 'TEXT'
-        if data_type == 'TIMESTAMP':
+        if result_type == 'TIMESTAMP':
             return 'TIMESTAMP'
-    return data_type
+        if result_type.startswith('DECIMAL'):
+            if precision and scale:
+                return f"DECIMAL({precision}, {scale})"
+            return 'DECIMAL'
+        if result_type in ['VARCHAR', 'CHAR']:
+            if length:
+                return f"{result_type}({length})"
+            return 'VARCHAR(255)'
+        if result_type.startswith('FLOAT'):
+            if precision:
+                return f"REAL"
+            return 'REAL'
+        if result_type.startswith('DOUBLE'):
+            return 'DOUBLE PRECISION'
+    else:
+        # MySQL, Spark, StarRocks, Hive, Doris
+        if result_type == 'STRING':
+            if database_type in ['spark', 'hive']:
+                return 'STRING'
+            return 'VARCHAR(255)'
+        if result_type.startswith('DECIMAL'):
+            if precision and scale:
+                return f"DECIMAL({precision}, {scale})"
+            return 'DECIMAL(24, 6)'
+        if result_type == 'TIMESTAMP':
+            if database_type in ['mysql', 'starrocks', 'doris']:
+                return 'DATETIME'
+            return 'TIMESTAMP'
+        if result_type in ['VARCHAR', 'CHAR']:
+            if length:
+                return f"{result_type}({length})"
+            return 'VARCHAR(255)'
+        if result_type.startswith('FLOAT'):
+            if precision:
+                return f"FLOAT({precision})"
+            return 'FLOAT'
+        if result_type.startswith('DOUBLE'):
+            if precision:
+                return f"DOUBLE({precision})"
+            return 'DOUBLE'
+
+    return result_type
 
 
 def select_primary_key(fields):
@@ -489,6 +572,11 @@ class APIHandler(SimpleHTTPRequestHandler):
         .btn-delete { background: #dc3545; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
         .btn-delete:hover { background: #c82333; }
         .rule-header { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 80px 40px; gap: 10px; margin-bottom: 10px; font-size: 12px; color: #666; font-weight: 600; }
+        .type-config { display: none; margin-top: 10px; padding: 10px; background: #f0f7ff; border-radius: 4px; }
+        .type-config.show { display: block; }
+        .type-config-row { display: flex; align-items: center; gap: 10px; margin-bottom: 5px; }
+        .type-config-row label { font-size: 12px; color: #666; min-width: 80px; }
+        .type-config-row input { flex: 1; padding: 6px; border: 1px solid #ddd; border-radius: 4px; }
         .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 2px solid #007bff; }
         .tab { padding: 12px 24px; background: #f8f9fa; border: 1px solid #ddd; border-bottom: none; border-radius: 6px 6px 0 0; cursor: pointer; font-weight: 500; color: #666; transition: all 0.3s; }
         .tab:hover { background: #e9ecef; }
@@ -566,6 +654,9 @@ FROM credit_usage_detail"></textarea>
                     <span id="rulesDbCount" style="color: #666;"></span>
                 </div>
                 <p style="color: #666; margin-bottom: 15px;">为每种数据库类型配置自定义的字段类型推断规则，根据字段名或注释自动匹配目标类型。规则按优先级从小到大依次应用。</p>
+                <div style="background: #e3f2fd; padding: 10px; border-radius: 6px; margin-bottom: 15px; font-size: 13px; color: #1976d2;">
+                    <strong>💡 提示：</strong> 选择 DECIMAL、VARCHAR、CHAR、FLOAT、DOUBLE 类型时，会显示额外的配置选项（精度、小数位、长度等），可以自定义类型参数。
+                </div>
                 <div id="mappingContainer"></div>
             </div>
         </div>
@@ -736,7 +827,7 @@ FROM credit_usage_detail"></textarea>
                             </div>
                             <div>
                                 <label>目标类型</label>
-                                <select data-field="dataType">
+                                <select data-field="dataType" onchange="toggleTypeConfig(this, '${dbType}', ${index})">
                                     ${typeOptions.map(opt => `<option value="${opt}" ${rule.dataType === opt ? 'selected' : ''}>${opt}</option>`).join('')}
                                 </select>
                             </div>
@@ -746,6 +837,11 @@ FROM credit_usage_detail"></textarea>
                             </div>
                             <div>
                                 <button class="btn-delete" onclick="deleteRule('${dbType}', ${index})">删除</button>
+                            </div>
+
+                            <!-- 类型配置区域 -->
+                            <div class="type-config ${hasTypeConfig(rule.dataType) ? 'show' : ''}" id="typeConfig_${dbType}_${index}">
+                                ${renderTypeConfigInputs(dbType, rule.dataType, rule)}
                             </div>
                         </div>
                     `;
@@ -759,6 +855,76 @@ FROM credit_usage_detail"></textarea>
                 section.innerHTML = rulesHtml;
                 mappingContainer.appendChild(section);
             });
+        }
+
+        // 判断类型是否需要配置
+        function hasTypeConfig(dataType) {
+            const upperType = dataType.toUpperCase();
+            return upperType.includes('VARCHAR') || upperType.includes('CHAR') ||
+                   upperType.includes('DECIMAL') || upperType.includes('NUMERIC') ||
+                   upperType.includes('FLOAT') || upperType.includes('DOUBLE');
+        }
+
+        // 渲染类型配置输入框
+        function renderTypeConfigInputs(dbType, dataType, rule) {
+            const upperType = dataType.toUpperCase();
+            let html = '';
+
+            if (upperType.includes('DECIMAL') || upperType.includes('NUMERIC')) {
+                // DECIMAL 类型：精度和小数位
+                const precision = rule.precision || 24;
+                const scale = rule.scale || 6;
+                html = `
+                    <div class="type-config-row">
+                        <label>精度（总位数）</label>
+                        <input type="number" data-field="precision" value="${precision}" min="1" max="65" placeholder="24">
+                        <label style="min-width: auto;">小数位</label>
+                        <input type="number" data-field="scale" value="${scale}" min="0" max="30" placeholder="6">
+                    </div>
+                `;
+            } else if (upperType.includes('VARCHAR') || upperType.includes('CHAR')) {
+                // VARCHAR/CHAR 类型：长度
+                const length = rule.length || 255;
+                html = `
+                    <div class="type-config-row">
+                        <label>长度</label>
+                        <input type="number" data-field="length" value="${length}" min="1" max="65535" placeholder="255">
+                    </div>
+                `;
+            } else if (upperType.includes('FLOAT') || upperType.includes('DOUBLE')) {
+                // FLOAT/DOUBLE 类型：精度（可选）
+                const precision = rule.precision || '';
+                html = `
+                    <div class="type-config-row">
+                        <label>精度（可选）</label>
+                        <input type="number" data-field="precision" value="${precision}" min="1" max="255" placeholder="留空使用默认值">
+                    </div>
+                `;
+            }
+
+            return html;
+        }
+
+        // 切换类型配置显示
+        function toggleTypeConfig(selectElement, dbType, index) {
+            const dataType = selectElement.value;
+            const configDiv = document.getElementById(`typeConfig_${dbType}_${index}`);
+
+            if (hasTypeConfig(dataType)) {
+                configDiv.classList.add('show');
+                // 重新渲染配置输入框
+                configDiv.innerHTML = renderTypeConfigInputs(dbType, dataType, {
+                    precision: 24,
+                    scale: 6,
+                    length: 255
+                });
+            } else {
+                configDiv.classList.remove('show');
+            }
+
+            // 更新规则中的dataType
+            const rule = customRules[dbType][index];
+            rule.dataType = dataType;
         }
 
         function addRule(dbType) {
@@ -792,15 +958,33 @@ FROM credit_usage_detail"></textarea>
                 const dataTypeSelect = item.querySelector('[data-field="dataType"]');
                 const priorityInput = item.querySelector('[data-field="priority"]');
 
+                // 收集类型配置参数
+                const precisionInput = item.querySelector('[data-field="precision"]');
+                const scaleInput = item.querySelector('[data-field="scale"]');
+                const lengthInput = item.querySelector('[data-field="length"]');
+
                 const keywords = keywordInput.value.split(',').map(k => k.trim()).filter(k => k);
 
-                customRules[dbType][index] = {
+                const rule = {
                     keywords: keywords,
                     matchType: matchTypeSelect.value,
                     targetField: targetFieldSelect.value,
                     dataType: dataTypeSelect.value,
                     priority: parseInt(priorityInput.value) || 999
                 };
+
+                // 添加类型配置参数
+                if (precisionInput && precisionInput.value) {
+                    rule.precision = parseInt(precisionInput.value);
+                }
+                if (scaleInput && scaleInput.value) {
+                    rule.scale = parseInt(scaleInput.value);
+                }
+                if (lengthInput && lengthInput.value) {
+                    rule.length = parseInt(lengthInput.value);
+                }
+
+                customRules[dbType][index] = rule;
             });
 
             return customRules;
