@@ -325,19 +325,104 @@ export default function Home() {
   };
 
   const updateRule = (id: string, updates: Partial<GlobalRule>) => {
-    setGlobalRules(globalRules.map(rule => 
+    setGlobalRules(globalRules.map(rule =>
       rule.id === id ? { ...rule, ...updates } : rule
     ));
+    saveRules();
+  };
+
+  const toggleAllDatabases = (ruleId: string, selectAll: boolean) => {
+    setGlobalRules(globalRules.map(rule => {
+      if (rule.id !== ruleId) return rule;
+
+      const allDatabases = Object.keys(DB_LABELS);
+      const newTargetDatabases = selectAll ? allDatabases : [];
+
+      // 如果全选，自动为所有数据库设置类型（沿用第一个数据库的类型）
+      if (selectAll && newTargetDatabases.length > 0) {
+        const firstDbType = newTargetDatabases[0];
+        const baseType = rule.dataTypes[firstDbType as keyof typeof rule.dataTypes];
+        const baseParams = rule.typeParams[firstDbType as keyof typeof rule.typeParams] || {};
+
+        const newDataTypes: Record<string, string> = {};
+        const newTypeParams: Record<string, any> = {};
+
+        newTargetDatabases.forEach(dbType => {
+          newDataTypes[dbType] = baseType || 'STRING';
+          newTypeParams[dbType] = baseParams;
+        });
+
+        return {
+          ...rule,
+          targetDatabases: newTargetDatabases,
+          dataTypes: newDataTypes,
+          typeParams: newTypeParams
+        };
+      }
+
+      return {
+        ...rule,
+        targetDatabases: newTargetDatabases
+      };
+    }));
+    saveRules();
+  };
+
+  const handleDatabaseChange = (ruleId: string, dbType: string, checked: boolean) => {
+    setGlobalRules(globalRules.map(rule => {
+      if (rule.id !== ruleId) return rule;
+
+      const newTargetDatabases = checked
+        ? [...rule.targetDatabases, dbType]
+        : rule.targetDatabases.filter(d => d !== dbType);
+
+      // 如果勾选了数据库，自动沿用第一个数据库的类型
+      if (checked && newTargetDatabases.length > 1) {
+        const firstDbType = newTargetDatabases[0];
+        const baseType = rule.dataTypes[firstDbType as keyof typeof rule.dataTypes] || 'STRING';
+        const baseParams = rule.typeParams[firstDbType as keyof typeof rule.typeParams] || {};
+
+        const newDataTypes = { ...rule.dataTypes, [dbType]: baseType };
+        const newTypeParams = { ...rule.typeParams, [dbType]: baseParams };
+
+        return {
+          ...rule,
+          targetDatabases: newTargetDatabases,
+          dataTypes: newDataTypes,
+          typeParams: newTypeParams
+        };
+      }
+
+      // 如果取消勾选，移除对应的类型配置
+      if (!checked) {
+        const newDataTypes = { ...rule.dataTypes };
+        const newTypeParams = { ...rule.typeParams };
+        delete newDataTypes[dbType as keyof typeof newDataTypes];
+        delete newTypeParams[dbType as keyof typeof newTypeParams];
+
+        return {
+          ...rule,
+          targetDatabases: newTargetDatabases,
+          dataTypes: newDataTypes,
+          typeParams: newTypeParams
+        };
+      }
+
+      return {
+        ...rule,
+        targetDatabases: newTargetDatabases
+      };
+    }));
     saveRules();
   };
 
   const updateTypeParam = (ruleId: string, dbType: string, paramUpdates: any) => {
     setGlobalRules(globalRules.map(rule => {
       if (rule.id !== ruleId) return rule;
-      
+
       const newTypeParams = { ...rule.typeParams };
       newTypeParams[dbType] = { ...newTypeParams[dbType], ...paramUpdates };
-      
+
       return { ...rule, typeParams: newTypeParams };
     }));
     saveRules();
@@ -613,7 +698,25 @@ export default function Home() {
 
                   {/* 第二行：目标数据库 */}
                   <div className="mb-3">
-                    <label className="text-xs text-gray-500 block mb-2">目标数据库</label>
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="text-xs text-gray-500">目标数据库</label>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleAllDatabases(rule.id, true)}
+                          className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                        >
+                          全选
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => toggleAllDatabases(rule.id, false)}
+                          className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
+                        >
+                          取消全选
+                        </button>
+                      </div>
+                    </div>
                     <div className="flex flex-wrap gap-2">
                       {Object.entries(DB_LABELS).map(([dbType, label]) => (
                         <label
@@ -623,12 +726,7 @@ export default function Home() {
                           <input
                             type="checkbox"
                             checked={rule.targetDatabases.includes(dbType)}
-                            onChange={(e) => {
-                              const newDatabases = e.target.checked
-                                ? [...rule.targetDatabases, dbType]
-                                : rule.targetDatabases.filter(d => d !== dbType);
-                              updateRule(rule.id, { targetDatabases: newDatabases });
-                            }}
+                            onChange={(e) => handleDatabaseChange(rule.id, dbType, e.target.checked)}
                             className="rounded"
                           />
                           <span className="text-sm">{label}</span>
