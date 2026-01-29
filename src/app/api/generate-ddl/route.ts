@@ -38,19 +38,19 @@ function parseSQLFields(sql: string): FieldInfo[] {
   const fields: FieldInfo[] = [];
   sql = sql.trim();
 
-  // 策略1: 解析SELECT ... FROM
+  // 策略1: 解析SELECT ... FROM（要求FROM后面有表名）
   if (sql.toUpperCase().includes('SELECT')) {
     const result = tryParseSelectFrom(sql);
     if (result.length > 0) return result;
   }
 
-  // 策略2: SELECT后无FROM
+  // 策略2: SELECT后无FROM（可能是纯字段列表或不完整的SELECT语句）
   if (sql.toUpperCase().includes('SELECT')) {
     const result = tryParseSelectFields(sql);
     if (result.length > 0) return result;
   }
 
-  // 策略3: 纯字段列表
+  // 策略3: 纯字段列表（可能包含FROM关键字，如逗号分隔的列表）
   const result = tryParseFieldList(sql);
   if (result.length > 0) return result;
 
@@ -72,12 +72,23 @@ function tryParseSelectFrom(sql: string): FieldInfo[] {
     } else if (char === ')') {
       parenCount--;
     } else if (parenCount === 0 && sql.substr(i, 4).toUpperCase() === 'FROM') {
-      const nextChar = sql[i + 4];
-      if (!nextChar || /\s/.test(nextChar)) {
-        const prevChar = i === 0 ? '' : sql[i - 1];
-        if (i === 0 || /\s/.test(prevChar)) {
-          fromPos = i;
+      // 检查FROM后面是否有表名（非空格字符）
+      let hasTableName = false;
+      for (let j = i + 4; j < sql.length; j++) {
+        if (!/\s/.test(sql[j])) {
+          hasTableName = true;
           break;
+        }
+      }
+      
+      if (hasTableName) {
+        const nextChar = sql[i + 4];
+        if (!nextChar || /\s/.test(nextChar)) {
+          const prevChar = i === 0 ? '' : sql[i - 1];
+          if (i === 0 || /\s/.test(prevChar)) {
+            fromPos = i;
+            break;
+          }
         }
       }
     }
@@ -108,35 +119,7 @@ function tryParseSelectFields(sql: string): FieldInfo[] {
   return parseSelectClause(selectClause);
 }
 
-function tryParseFieldList(sql: string): FieldInfo[] {
-  const cleanSql = sql.replace(/--.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '').trim();
-  const fieldExpressions: string[] = [];
-  let current = '';
-  let parenCount = 0;
 
-  for (const char of cleanSql) {
-    if (char === '(') {
-      parenCount++;
-      current += char;
-    } else if (char === ')') {
-      parenCount--;
-      current += char;
-    } else if (char === ',' && parenCount === 0) {
-      fieldExpressions.push(current.trim());
-      current = '';
-    } else {
-      current += char;
-    }
-  }
-
-  if (current.trim()) {
-    fieldExpressions.push(current.trim());
-  }
-
-  return fieldExpressions
-    .map(expr => parseFieldExpression(expr))
-    .filter((f): f is FieldInfo => f !== null);
-}
 
 function parseSelectClause(selectClause: string): FieldInfo[] {
   const commentMap: Record<string, string> = {};
@@ -217,7 +200,9 @@ function parseFieldExpression(expr: string, commentMap?: Record<string, string>)
 
   if (!commentMap) commentMap = {};
 
-  if (expr.toUpperCase().includes('SELECT') || expr.toUpperCase().includes(' FROM ')) {
+  // 过滤掉包含子查询的字段
+  if (expr.toUpperCase().includes('SELECT') || 
+      (expr.toUpperCase().includes('FROM') && expr.toUpperCase().includes('('))) {
     return null;
   }
 
