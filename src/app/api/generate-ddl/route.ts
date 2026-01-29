@@ -138,16 +138,17 @@ function tryParseSelectFields(sql: string): FieldInfo[] {
 }
 
 function tryParseFieldList(sql: string): FieldInfo[] {
-  // 去除注释
-  const cleanSQL = sql.replace(/--.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '').trim();
+  // 去除注释（保留注释后面的逗号）
+  const cleanSQL = sql.replace(/--.*?(,)?$/gm, '$1').replace(/\/\*[\s\S]*?\*\//g, '').trim();
   
-  // 提取注释到映射表
+  // 提取注释到映射表（去除注释末尾的逗号）
   const commentMap: Record<string, string> = {};
   const lines = sql.split('\n');
   
   for (const line of lines) {
-    const match = line.match(/--\s*(.+)$/);
+    const match = line.match(/--\s*(.+?)(,)?$/);
     if (match) {
+      // 去除注释末尾的逗号
       const comment = match[1].trim();
       const fieldPart = line.substring(0, match.index).trim();
       if (fieldPart) {
@@ -193,8 +194,9 @@ function parseSelectClause(selectClause: string): FieldInfo[] {
   const lines = selectClause.split('\n');
 
   for (const line of lines) {
-    const match = line.match(/--\s*(.+)$/);
+    const match = line.match(/--\s*(.+?)(,)?$/);
     if (match) {
+      // 去除注释末尾的逗号
       const comment = match[1].trim();
       const fieldPart = line.substring(0, match.index).trim();
       if (fieldPart) {
@@ -227,7 +229,7 @@ function parseSelectClause(selectClause: string): FieldInfo[] {
     }
   }
 
-  const cleanClause = selectClause.replace(/--.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  const cleanClause = selectClause.replace(/--.*?(,)?$/gm, '$1').replace(/\/\*[\s\S]*?\*\//g, '');
   const fieldExpressions = splitFields(cleanClause);
 
   return fieldExpressions
