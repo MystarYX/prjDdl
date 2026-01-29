@@ -164,42 +164,7 @@ export default function Home() {
     navigator.clipboard.writeText(ddlOutput);
   };
 
-  const handleExportRules = () => {
-    const data = {
-      version: '1.0',
-      exportTime: new Date().toISOString(),
-      rules: customRules
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `ddl-rules-${new Date().toISOString().slice(0, 10)}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
 
-  const handleImportRules = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const data = JSON.parse(event.target?.result as string);
-        if (data.rules && confirm('导入将覆盖当前规则，确定继续吗？')) {
-          setCustomRules(data.rules);
-          saveRules();
-        }
-      } catch (err) {
-        alert('导入失败: ' + (err instanceof Error ? err.message : '未知错误'));
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-  };
 
   const handleResetRules = () => {
     if (confirm('确定要重置所有规则为默认值吗？')) {
@@ -440,30 +405,11 @@ export default function Home() {
             {/* 操作按钮 */}
             <div className="flex gap-3 mb-6 flex-wrap">
               <button
-                onClick={handleExportRules}
-                className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors"
-              >
-                📤 导出配置
-              </button>
-              <button
-                onClick={() => document.getElementById('importFile')?.click()}
-                className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
-              >
-                📥 导入配置
-              </button>
-              <button
                 onClick={handleResetRules}
                 className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
               >
                 🔄 重置规则
               </button>
-              <input
-                id="importFile"
-                type="file"
-                accept=".json"
-                className="hidden"
-                onChange={handleImportRules}
-              />
             </div>
 
             <div className="bg-blue-50 p-4 rounded-lg mb-6 text-sm text-blue-700">
