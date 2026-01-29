@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { RefreshCw, Plus, Trash2, ChevronUp, ChevronDown, ArrowLeft } from 'lucide-react';
+import { RefreshCw, Plus, Trash2, ChevronUp, ChevronDown, ArrowLeft, Save } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface FieldTypeInfo {
@@ -193,6 +193,7 @@ export default function RulesPage() {
   const { toast } = useToast();
   const [unifiedRules, setUnifiedRules] = useState<UnifiedRule[]>(DEFAULT_RULES);
   const [selectedDatabases, setSelectedDatabases] = useState<string[]>(['spark', 'mysql', 'clickhouse']);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   // 初始化加载
   useEffect(() => {
@@ -228,18 +229,27 @@ export default function RulesPage() {
         };
       });
     });
+
+    setHasUnsavedChanges(true);
   }, [selectedDatabases]);
 
-  // 规则变化时保存
+  // 规则变化时标记为未保存
   useEffect(() => {
     if (unifiedRules !== DEFAULT_RULES) {
-      saveRules(unifiedRules);
+      setHasUnsavedChanges(true);
     }
   }, [unifiedRules]);
 
+  function handleSave() {
+    saveRules(unifiedRules);
+    saveSelectedDatabases(selectedDatabases);
+    setHasUnsavedChanges(false);
+    toast({ title: '保存成功', description: '规则配置已保存' });
+  }
+
   function toggleDatabase(dbType: string) {
-    setSelectedDatabases(prev => 
-      prev.includes(dbType) 
+    setSelectedDatabases(prev =>
+      prev.includes(dbType)
         ? prev.filter(d => d !== dbType)
         : [...prev, dbType]
     );
@@ -258,10 +268,12 @@ export default function RulesPage() {
       }, {} as Record<string, FieldTypeInfo>),
     };
     setUnifiedRules([...unifiedRules, newRule]);
+    setHasUnsavedChanges(true);
   }
 
   function updateRule(id: string, field: keyof UnifiedRule, value: any) {
     setUnifiedRules(rules => rules.map(rule => rule.id === id ? { ...rule, [field]: value } : rule));
+    setHasUnsavedChanges(true);
   }
 
   function updateRuleDbType(ruleId: string, dbType: string, field: string, value: any) {
@@ -277,10 +289,12 @@ export default function RulesPage() {
       }
       return rule;
     }));
+    setHasUnsavedChanges(true);
   }
 
   function deleteRule(id: string) {
     setUnifiedRules(rules => rules.filter(rule => rule.id !== id));
+    setHasUnsavedChanges(true);
   }
 
   function moveRule(index: number, direction: 'up' | 'down') {
@@ -289,11 +303,13 @@ export default function RulesPage() {
     if (targetIndex < 0 || targetIndex >= newRules.length) return;
     [newRules[index], newRules[targetIndex]] = [newRules[targetIndex], newRules[index]];
     setUnifiedRules(newRules);
+    setHasUnsavedChanges(true);
   }
 
   function resetRules() {
     setUnifiedRules(DEFAULT_RULES);
-    toast({ title: '已重置', description: '规则已恢复为默认值' });
+    setHasUnsavedChanges(true);
+    toast({ title: '已重置', description: '规则已恢复为默认值，请点击保存' });
   }
 
   function needsPrecision(dataType: string) {
@@ -311,7 +327,15 @@ export default function RulesPage() {
       <div className="container mx-auto p-6 space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" onClick={() => router.push('/')}>
+            <Button variant="ghost" onClick={() => {
+              if (hasUnsavedChanges) {
+                if (confirm('您有未保存的更改，确定要离开吗？')) {
+                  router.push('/');
+                }
+              } else {
+                router.push('/');
+              }
+            }}>
               <ArrowLeft className="w-4 h-4 mr-2" />
               返回
             </Button>
@@ -325,9 +349,13 @@ export default function RulesPage() {
               <RefreshCw className="w-4 h-4 mr-2" />
               重置默认
             </Button>
-            <Button onClick={addRule}>
+            <Button onClick={addRule} variant="outline">
               <Plus className="w-4 h-4 mr-2" />
               添加规则
+            </Button>
+            <Button onClick={handleSave} disabled={!hasUnsavedChanges}>
+              <Save className="w-4 h-4 mr-2" />
+              {hasUnsavedChanges ? '保存' : '已保存'}
             </Button>
           </div>
         </div>
