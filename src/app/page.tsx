@@ -154,9 +154,76 @@ export default function Home() {
     const saved = localStorage.getItem('ddl_generator_global_rules');
     if (saved) {
       try {
-        setGlobalRules(JSON.parse(saved));
+        const parsed = JSON.parse(saved);
+        
+        // 检查是否是新格式（包含typeParams）
+        if (parsed.length > 0 && !parsed[0].typeParams) {
+          // 迁移旧数据到新格式
+          const migrated = parsed.map((rule: any) => {
+            // 从dataType中提取参数
+            const typeParams: Record<string, any> = {};
+            const dataTypes: Record<string, string> = {};
+
+            Object.entries(rule.dataTypes || {}).forEach(([dbType, dataType]: [string, any]) => {
+              const strType = dataType as string;
+              const upper = strType.toUpperCase();
+
+              // DECIMAL(24, 6) -> DECIMAL + {precision: 24, scale: 6}
+              const decimalMatch = strType.match(/^(DECIMAL|NUMERIC)\((\d+),\s*(\d+)\)$/i);
+              if (decimalMatch) {
+                dataTypes[dbType] = decimalMatch[1];
+                typeParams[dbType] = {
+                  precision: parseInt(decimalMatch[2]),
+                  scale: parseInt(decimalMatch[3])
+                };
+              }
+              // VARCHAR(255) -> VARCHAR + {length: 255}
+              else if (upper.includes('VARCHAR') || upper.includes('CHAR')) {
+                const varcharMatch = strType.match(/^(VARCHAR|CHAR)\((\d+)\)$/i);
+                if (varcharMatch) {
+                  dataTypes[dbType] = varcharMatch[1];
+                  typeParams[dbType] = {
+                    length: parseInt(varcharMatch[2])
+                  };
+                } else {
+                  dataTypes[dbType] = strType;
+                }
+              }
+              // FLOAT(53) -> FLOAT + {precision: 53}
+              else if (upper.includes('FLOAT') || upper.includes('DOUBLE')) {
+                const floatMatch = strType.match(/^(FLOAT|DOUBLE)\((\d+)\)$/i);
+                if (floatMatch) {
+                  dataTypes[dbType] = floatMatch[1];
+                  typeParams[dbType] = {
+                    precision: parseInt(floatMatch[2])
+                  };
+                } else {
+                  dataTypes[dbType] = strType;
+                }
+              }
+              else {
+                dataTypes[dbType] = strType;
+              }
+            });
+
+            return {
+              ...rule,
+              dataTypes,
+              typeParams
+            };
+          });
+          
+          setGlobalRules(migrated);
+          // 保存迁移后的数据
+          localStorage.setItem('ddl_generator_global_rules', JSON.stringify(migrated));
+        } else {
+          // 新格式，直接使用
+          setGlobalRules(parsed);
+        }
       } catch (e) {
         console.error('Failed to load rules:', e);
+        // 加载失败时使用默认规则
+        setGlobalRules(DEFAULT_GLOBAL_RULES);
       }
     }
   }, []);
@@ -265,6 +332,14 @@ export default function Home() {
     if (confirm('确定要重置所有规则为默认值吗？')) {
       setGlobalRules(JSON.parse(JSON.stringify(DEFAULT_GLOBAL_RULES)));
       saveRules();
+    }
+  };
+
+  const handleClearLocalStorage = () => {
+    if (confirm('确定要清除所有保存的规则数据吗？这将删除localStorage中的所有规则，恢复为默认规则。')) {
+      localStorage.removeItem('ddl_generator_global_rules');
+      setGlobalRules(JSON.parse(JSON.stringify(DEFAULT_GLOBAL_RULES)));
+      alert('已清除localStorage，规则已恢复为默认值');
     }
   };
 
@@ -527,6 +602,12 @@ export default function Home() {
                 className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
               >
                 🔄 重置规则
+              </button>
+              <button
+                onClick={handleClearLocalStorage}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                🗑️ 清除缓存
               </button>
             </div>
 
