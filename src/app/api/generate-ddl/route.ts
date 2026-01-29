@@ -522,18 +522,20 @@ function generateDDL(fields: FieldInfo[], customRules: Record<string, InferenceR
   const config = DATABASE_CONFIGS[databaseType];
   const dbRules = customRules[databaseType] || [];
 
-  const maxName = Math.max(...fields.map(f => f.name.length), 30);
-  const maxType = 18;
-
   const adjustedFields = fields.map(field => {
-    const typeInfo = inferFieldType(field.name, field.comment, dbRules);
+    // 优先使用别名作为字段名
+    const fieldName = field.alias || field.name;
+    const typeInfo = inferFieldType(fieldName, field.comment, dbRules);
     const mappedType = mapDataType(typeInfo, databaseType);
     return {
-      name: field.name,
+      name: fieldName,
       type: mappedType,
       comment: field.comment
     };
   });
+
+  const maxName = Math.max(...adjustedFields.map(f => f.name.length), 30);
+  const maxType = 18;
 
   const ddlParts: string[] = [`${config.prefix} 表名 (`];
 
