@@ -58,10 +58,12 @@ function parseSQLFields(sql: string): FieldInfo[] {
 }
 
 function tryParseSelectFrom(sql: string): FieldInfo[] {
-  const selectMatch = sql.match(/\bSELECT\b/i);
-  if (!selectMatch?.index) return [];
+  // 使用简单的字符串查找，避免正则表达式问题
+  const selectIndex = sql.toUpperCase().indexOf('SELECT');
+  if (selectIndex === -1) return [];
 
-  const selectStart = selectMatch.index + selectMatch[0].length;
+  const selectStart = selectIndex + 6; // 'SELECT'的长度是6
+  
   let parenCount = 0;
   let fromPos = -1;
 
@@ -72,6 +74,26 @@ function tryParseSelectFrom(sql: string): FieldInfo[] {
     } else if (char === ')') {
       parenCount--;
     } else if (parenCount === 0 && sql.substr(i, 4).toUpperCase() === 'FROM') {
+      // 检查FROM前面是否有字符，确保是独立的FROM关键字
+      const prevChar = i === 0 ? ' ' : sql[i - 1];
+      
+      // FROM前面必须是空格
+      if (!/\s/.test(prevChar)) {
+        continue;
+      }
+      
+      // 检查FROM后面是否有字符
+      if (i + 4 >= sql.length) {
+        continue;
+      }
+      
+      const nextChar = sql[i + 4];
+      
+      // FROM后面必须是空格或标点符号（不能是字母数字）
+      if (!/\s/.test(nextChar) && ![',', '(', ')', ';'].includes(nextChar)) {
+        continue;
+      }
+      
       // 检查FROM后面是否有表名（非空格字符）
       let hasTableName = false;
       for (let j = i + 4; j < sql.length; j++) {
@@ -82,14 +104,8 @@ function tryParseSelectFrom(sql: string): FieldInfo[] {
       }
       
       if (hasTableName) {
-        const nextChar = sql[i + 4];
-        if (!nextChar || /\s/.test(nextChar)) {
-          const prevChar = i === 0 ? '' : sql[i - 1];
-          if (i === 0 || /\s/.test(prevChar)) {
-            fromPos = i;
-            break;
-          }
-        }
+        fromPos = i;
+        break;
       }
     }
   }
@@ -97,21 +113,23 @@ function tryParseSelectFrom(sql: string): FieldInfo[] {
   if (fromPos === -1) return [];
 
   const selectClause = sql.substring(selectStart, fromPos).trim();
-  return parseSelectClause(selectClause);
+  const result = parseSelectClause(selectClause);
+  return result;
 }
 
 function tryParseSelectFields(sql: string): FieldInfo[] {
-  const selectMatch = sql.match(/\bSELECT\b/i);
-  if (!selectMatch?.index) return [];
+  // 使用简单的字符串查找，避免正则表达式问题
+  const selectIndex = sql.toUpperCase().indexOf('SELECT');
+  if (selectIndex === -1) return [];
 
-  const selectStart = selectMatch.index + selectMatch[0].length;
+  const selectStart = selectIndex + 6; // 'SELECT'的长度是6
   let selectClause = sql.substring(selectStart).trim();
 
   const stopKeywords = ['WHERE', 'GROUP BY', 'ORDER BY', 'HAVING', 'LIMIT', 'UNION'];
   for (const keyword of stopKeywords) {
-    const keywordMatch = selectClause.match(new RegExp(`\\b${keyword}\\b`, 'i'));
-    if (keywordMatch?.index !== undefined) {
-      selectClause = selectClause.substring(0, keywordMatch.index).trim();
+    const keywordIndex = selectClause.toUpperCase().indexOf(keyword);
+    if (keywordIndex !== -1) {
+      selectClause = selectClause.substring(0, keywordIndex).trim();
       break;
     }
   }
@@ -119,7 +137,56 @@ function tryParseSelectFields(sql: string): FieldInfo[] {
   return parseSelectClause(selectClause);
 }
 
+function tryParseFieldList(sql: string): FieldInfo[] {
+  // 去除注释
+  const cleanSQL = sql.replace(/--.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '').trim();
+  
+  // 提取注释到映射表
+  const commentMap: Record<string, string> = {};
+  const lines = sql.split('\n');
+  
+  for (const line of lines) {
+    const match = line.match(/--\s*(.+)$/);
+    if (match) {
+      const comment = match[1].trim();
+      const fieldPart = line.substring(0, match.index).trim();
+      if (fieldPart) {
+        // 去除前导逗号
+        let normalizedKey = fieldPart.replace(/^,/, '').trim();
+        
+        // 去除AS别名部分
+        const asMatch = normalizedKey.match(/^(.+?)\s+AS\s+[^\s,]+$/i);
+        if (asMatch) {
+          normalizedKey = asMatch[1].trim();
+        } else {
+          // 如果没有AS关键字，尝试去掉最后一部分（隐式别名）
+          const parts = normalizedKey.split(/\s+/);
+          if (parts.length > 1) {
+            const lastPart = parts[parts.length - 1];
+            const containsOperator = ['(', '+', '-', '*', '/', '='].some(op => 
+              normalizedKey.substring(0, normalizedKey.lastIndexOf(lastPart)).includes(op)
+            );
+            if (!containsOperator && !lastPart.includes('(') && !lastPart.includes(')')) {
+              normalizedKey = parts.slice(0, -1).join(' ');
+            }
+          }
+        }
+        
+        // 规范化：移除多余空格，合并连续空格
+        normalizedKey = normalizedKey.replace(/\s+/g, ' ').trim();
+        
+        commentMap[normalizedKey] = comment;
+      }
+    }
+  }
 
+  // 使用splitFields函数分割字段
+  const fieldExpressions = splitFields(cleanSQL);
+
+  return fieldExpressions
+    .map(expr => parseFieldExpression(expr, commentMap))
+    .filter((f): f is FieldInfo => f !== null);
+}
 
 function parseSelectClause(selectClause: string): FieldInfo[] {
   const commentMap: Record<string, string> = {};
