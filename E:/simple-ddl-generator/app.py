@@ -663,8 +663,23 @@ FROM credit_usage_detail"></textarea>
                     <span id="rulesDbCount" style="color: #666;"></span>
                 </div>
                 <p style="color: #666; margin-bottom: 15px;">为每种数据库类型配置自定义的字段类型推断规则，根据字段名或注释自动匹配目标类型。规则按优先级从小到大依次应用。</p>
+
+                <!-- 规则操作按钮 -->
+                <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
+                    <button class="btn" onclick="exportRules()" style="flex: 1; min-width: 120px; background: #17a2b8; font-size: 14px; padding: 10px;">
+                        📤 导出配置
+                    </button>
+                    <button class="btn" onclick="document.getElementById('importFile').click()" style="flex: 1; min-width: 120px; background: #fd7e14; font-size: 14px; padding: 10px;">
+                        📥 导入配置
+                    </button>
+                    <button class="btn" onclick="resetRules()" style="flex: 1; min-width: 120px; background: #6c757d; font-size: 14px; padding: 10px;">
+                        🔄 重置规则
+                    </button>
+                    <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importRules(event)">
+                </div>
+
                 <div style="background: #e3f2fd; padding: 10px; border-radius: 6px; margin-bottom: 15px; font-size: 13px; color: #1976d2;">
-                    <strong>💡 提示：</strong> 选择 DECIMAL、VARCHAR、CHAR、FLOAT、DOUBLE 类型时，会显示额外的配置选项（精度、小数位、长度等），可以自定义类型参数。
+                    <strong>💡 提示：</strong> 选择 DECIMAL、VARCHAR、CHAR、FLOAT、DOUBLE 类型时，会显示额外的配置选项（精度、小数位、长度等），可以自定义类型参数。规则会自动保存到浏览器，刷新页面后可继续使用。
                 </div>
                 <div id="mappingContainer"></div>
             </div>
@@ -746,7 +761,104 @@ FROM credit_usage_detail"></textarea>
 
         let customRules = JSON.parse(JSON.stringify(DEFAULT_RULES));
 
-        // 标签页切换
+        // ==================== 规则持久化功能 ====================
+
+        const STORAGE_KEY = 'ddl_generator_rules';
+
+        // 保存规则到 localStorage
+        function saveRules() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(customRules));
+                console.log('✓ 规则已保存到本地存储');
+            } catch (e) {
+                console.error('✗ 保存规则失败:', e);
+            }
+        }
+
+        // 从 localStorage 加载规则
+        function loadRules() {
+            try {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (saved) {
+                    customRules = JSON.parse(saved);
+                    console.log('✓ 规则已从本地存储加载');
+                    return true;
+                }
+            } catch (e) {
+                console.error('✗ 加载规则失败:', e);
+            }
+            return false;
+        }
+
+        // 导出规则到文件
+        function exportRules() {
+            try {
+                const data = {
+                    version: '1.0',
+                    exportTime: new Date().toISOString(),
+                    rules: customRules
+                };
+
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `ddl-rules-${new Date().toISOString().slice(0, 10)}.json`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+
+                alert('✓ 规则配置已导出');
+            } catch (e) {
+                alert('✗ 导出失败: ' + e.message);
+            }
+        }
+
+        // 从文件导入规则
+        function importRules(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+
+                    if (data.rules) {
+                        if (confirm('导入将覆盖当前规则，确定继续吗？')) {
+                            customRules = data.rules;
+                            saveRules();
+                            renderMappings();
+                            alert('✓ 规则配置已导入');
+                        }
+                    } else {
+                        alert('✗ 无效的配置文件格式');
+                    }
+                } catch (err) {
+                    alert('✗ 导入失败: ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+
+            // 清空input，允许重复导入同一文件
+            event.target.value = '';
+        }
+
+        // 重置规则为默认值
+        function resetRules() {
+            if (confirm('确定要重置所有规则为默认值吗？此操作不可撤销。')) {
+                customRules = JSON.parse(JSON.stringify(DEFAULT_RULES));
+                saveRules();
+                renderMappings();
+                alert('✓ 规则已重置为默认值');
+            }
+        }
+
+        // 页面加载时尝试恢复规则
+        loadRules();
+
+        // ==================== 标签页切换 ====================
         function switchTab(tabName) {
             // 隐藏所有标签内容
             document.querySelectorAll('.tab-content').forEach(content => {
@@ -861,6 +973,18 @@ FROM credit_usage_detail"></textarea>
 
                 section.innerHTML = rulesHtml;
                 mappingContainer.appendChild(section);
+
+                // 为所有输入框添加change事件监听器
+                const inputs = section.querySelectorAll('input, select');
+                inputs.forEach(input => {
+                    // 跳过已经有onchange属性的元素
+                    if (input.hasAttribute('onchange') || input.hasAttribute('onclick')) {
+                        return;
+                    }
+                    input.addEventListener('change', () => {
+                        saveRules();
+                    });
+                });
             });
         }
 
@@ -917,6 +1041,8 @@ FROM credit_usage_detail"></textarea>
             const rule = customRules[dbType][index];
             rule.dataType = selectElement.value;
 
+            saveRules();
+
             // 重新渲染整个规则列表以显示/隐藏类型配置
             renderMappings();
         }
@@ -932,11 +1058,13 @@ FROM credit_usage_detail"></textarea>
                 dataType: 'STRING',
                 priority: 999
             });
+            saveRules();
             renderMappings();
         }
 
         function deleteRule(dbType, index) {
             customRules[dbType].splice(index, 1);
+            saveRules();
             renderMappings();
         }
 
