@@ -499,6 +499,31 @@ function inferFieldType(fieldName: string, customRules?: TypeRule[]): string {
   return 'STRING';
 }
 
+// 选择主键字段
+function selectPrimaryKey(fields: FieldInfo[]): string | null {
+  if (fields.length === 0) {
+    return null;
+  }
+
+  // 规则1: 优先选择第一个后缀为icode的字段
+  const icodeField = fields.find(f => f.name.toLowerCase().endsWith('icode'));
+  if (icodeField) {
+    return icodeField.name;
+  }
+
+  // 规则2: 选择第一个后缀为id的字段（不是icode）
+  const idField = fields.find(f => {
+    const lowerName = f.name.toLowerCase();
+    return lowerName.endsWith('id') && !lowerName.endsWith('icode');
+  });
+  if (idField) {
+    return idField.name;
+  }
+
+  // 规则3: 如果都没有，选择第一个字段
+  return fields[0].name;
+}
+
 function generateDDL(
   fields: FieldInfo[],
   customRules?: TypeRule[],
@@ -538,10 +563,22 @@ function generateDDL(
     }
   });
 
+  // 为MySQL添加主键
+  if (databaseType === 'mysql') {
+    const primaryKey = selectPrimaryKey(fields);
+    if (primaryKey) {
+      ddl += `\n   ,PRIMARY KEY (${primaryKey})`;
+    }
+  }
+
   ddl += '\n)';
 
-  // 添加表注释
+  // 添加表注释和引擎
   if (config.commentSyntax === 'INLINE') {
+    // MySQL特殊处理：添加ENGINE=InnoDB
+    if (databaseType === 'mysql') {
+      ddl += ' ENGINE=InnoDB';
+    }
     ddl += ` COMMENT '';`;
   } else if (config.commentSyntax === 'SEPARATE') {
     ddl += ';';
