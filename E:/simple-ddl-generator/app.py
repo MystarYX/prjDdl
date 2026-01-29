@@ -454,6 +454,12 @@ class APIHandler(SimpleHTTPRequestHandler):
         .btn-copy:hover { background: #218838; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
         .error { background: #f8d7da; color: #721c24; padding: 12px; border-radius: 6px; margin-top: 10px; display: none; }
+        .mapping-section { margin-bottom: 20px; border: 1px solid #ddd; border-radius: 6px; padding: 15px; }
+        .mapping-title { font-weight: 600; margin-bottom: 10px; color: #007bff; }
+        .mapping-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+        .mapping-item { display: flex; align-items: center; gap: 8px; }
+        .mapping-item label { flex: 0 0 80px; font-weight: 500; color: #555; }
+        .mapping-item select { flex: 1; padding: 6px; border: 1px solid #ddd; border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -464,14 +470,19 @@ class APIHandler(SimpleHTTPRequestHandler):
         <div class="card">
             <h3 class="card-title">目标数据库类型</h3>
             <div class="db-selector" id="dbSelector">
-                <label class="db-option"><input type="checkbox" value="spark" checked> Spark SQL</label>
-                <label class="db-option"><input type="checkbox" value="mysql"> MySQL</label>
-                <label class="db-option"><input type="checkbox" value="postgresql"> PostgreSQL</label>
-                <label class="db-option"><input type="checkbox" value="starrocks"> StarRocks</label>
-                <label class="db-option"><input type="checkbox" value="clickhouse"> ClickHouse</label>
-                <label class="db-option"><input type="checkbox" value="hive"> Hive</label>
-                <label class="db-option"><input type="checkbox" value="doris"> Doris</label>
+                <label class="db-option"><input type="checkbox" value="spark" checked onchange="toggleMapping('spark')"> Spark SQL</label>
+                <label class="db-option"><input type="checkbox" value="mysql" onchange="toggleMapping('mysql')"> MySQL</label>
+                <label class="db-option"><input type="checkbox" value="postgresql" onchange="toggleMapping('postgresql')"> PostgreSQL</label>
+                <label class="db-option"><input type="checkbox" value="starrocks" onchange="toggleMapping('starrocks')"> StarRocks</label>
+                <label class="db-option"><input type="checkbox" value="clickhouse" onchange="toggleMapping('clickhouse')"> ClickHouse</label>
+                <label class="db-option"><input type="checkbox" value="hive" onchange="toggleMapping('hive')"> Hive</label>
+                <label class="db-option"><input type="checkbox" value="doris" onchange="toggleMapping('doris')"> Doris</label>
             </div>
+        </div>
+
+        <div class="card" id="mappingCard" style="display: none;">
+            <h3 class="card-title">字段类型映射规则</h3>
+            <div id="mappingContainer"></div>
         </div>
 
         <div class="grid">
@@ -510,9 +521,163 @@ FROM credit_usage_detail"></textarea>
     </div>
 
     <script>
+        const DB_LABELS = {
+            'spark': 'Spark SQL',
+            'mysql': 'MySQL',
+            'postgresql': 'PostgreSQL',
+            'starrocks': 'StarRocks',
+            'clickhouse': 'ClickHouse',
+            'hive': 'Hive',
+            'doris': 'Doris'
+        };
+
+        const DEFAULT_MAPPINGS = {
+            'spark': {
+                'STRING': 'STRING',
+                'DECIMAL': 'DECIMAL(24, 6)',
+                'DATE': 'DATE',
+                'TIMESTAMP': 'TIMESTAMP',
+                'INT': 'BIGINT'
+            },
+            'mysql': {
+                'STRING': 'VARCHAR(255)',
+                'DECIMAL': 'DECIMAL(24, 6)',
+                'DATE': 'DATE',
+                'TIMESTAMP': 'DATETIME',
+                'INT': 'BIGINT'
+            },
+            'postgresql': {
+                'STRING': 'VARCHAR(255)',
+                'DECIMAL': 'DECIMAL(24, 6)',
+                'DATE': 'DATE',
+                'TIMESTAMP': 'TIMESTAMP',
+                'INT': 'BIGINT'
+            },
+            'starrocks': {
+                'STRING': 'VARCHAR(255)',
+                'DECIMAL': 'DECIMAL(24, 6)',
+                'DATE': 'DATE',
+                'TIMESTAMP': 'DATETIME',
+                'INT': 'BIGINT'
+            },
+            'clickhouse': {
+                'STRING': 'String',
+                'DECIMAL': 'Decimal(24, 6)',
+                'DATE': 'Date',
+                'TIMESTAMP': 'DateTime',
+                'INT': 'Int64'
+            },
+            'hive': {
+                'STRING': 'STRING',
+                'DECIMAL': 'DECIMAL(24, 6)',
+                'DATE': 'DATE',
+                'TIMESTAMP': 'TIMESTAMP',
+                'INT': 'BIGINT'
+            },
+            'doris': {
+                'STRING': 'VARCHAR(255)',
+                'DECIMAL': 'DECIMAL(24, 6)',
+                'DATE': 'DATE',
+                'TIMESTAMP': 'DATETIME',
+                'INT': 'BIGINT'
+            }
+        };
+
+        const TYPE_OPTIONS = {
+            'spark': ['STRING', 'VARCHAR(255)', 'DECIMAL(24, 6)', 'DATE', 'TIMESTAMP', 'BIGINT', 'INT', 'FLOAT', 'DOUBLE', 'BOOLEAN'],
+            'mysql': ['VARCHAR(255)', 'CHAR(1)', 'TEXT', 'DECIMAL(24, 6)', 'DATE', 'DATETIME', 'TIMESTAMP', 'BIGINT', 'INT', 'FLOAT', 'DOUBLE', 'BOOLEAN'],
+            'postgresql': ['VARCHAR(255)', 'CHAR(1)', 'TEXT', 'DECIMAL(24, 6)', 'DATE', 'TIMESTAMP', 'BIGINT', 'INTEGER', 'REAL', 'DOUBLE PRECISION', 'BOOLEAN'],
+            'starrocks': ['VARCHAR(255)', 'CHAR(1)', 'DECIMAL(24, 6)', 'DATE', 'DATETIME', 'BIGINT', 'INT', 'FLOAT', 'DOUBLE', 'BOOLEAN'],
+            'clickhouse': ['String', 'Decimal(24, 6)', 'Date', 'DateTime', 'Int64', 'Int32', 'Float64', 'Float32', 'Bool'],
+            'hive': ['STRING', 'VARCHAR(255)', 'DECIMAL(24, 6)', 'DATE', 'TIMESTAMP', 'BIGINT', 'INT', 'FLOAT', 'DOUBLE', 'BOOLEAN'],
+            'doris': ['VARCHAR(255)', 'CHAR(1)', 'DECIMAL(24, 6)', 'DATE', 'DATETIME', 'BIGINT', 'INT', 'FLOAT', 'DOUBLE', 'BOOLEAN']
+        };
+
         document.getElementById('sqlInput').addEventListener('input', function() {
             document.getElementById('charCount').textContent = this.value.length + ' 字符';
         });
+
+        function toggleMapping(dbType) {
+            const checkbox = document.querySelector(`input[value="${dbType}"]`);
+            renderMappings();
+        }
+
+        function renderMappings() {
+            const checkedDbs = Array.from(document.querySelectorAll('#dbSelector input:checked')).map(cb => cb.value);
+            const mappingCard = document.getElementById('mappingCard');
+            const mappingContainer = document.getElementById('mappingContainer');
+
+            if (checkedDbs.length === 0) {
+                mappingCard.style.display = 'none';
+                return;
+            }
+
+            mappingCard.style.display = 'block';
+            mappingContainer.innerHTML = '';
+
+            checkedDbs.forEach(dbType => {
+                const section = document.createElement('div');
+                section.className = 'mapping-section';
+                section.innerHTML = `
+                    <div class="mapping-title">${DB_LABELS[dbType]} 字段类型映射</div>
+                    <div class="mapping-grid">
+                        <div class="mapping-item">
+                            <label>STRING</label>
+                            <select id="mapping_${dbType}_STRING" data-db="${dbType}" data-type="STRING">
+                                ${TYPE_OPTIONS[dbType].map(opt => `<option value="${opt}" ${DEFAULT_MAPPINGS[dbType]['STRING'] === opt ? 'selected' : ''}>${opt}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="mapping-item">
+                            <label>DECIMAL</label>
+                            <select id="mapping_${dbType}_DECIMAL" data-db="${dbType}" data-type="DECIMAL">
+                                ${TYPE_OPTIONS[dbType].filter(opt => opt.includes('DECIMAL') || opt.includes('Decimal')).map(opt => `<option value="${opt}" ${DEFAULT_MAPPINGS[dbType]['DECIMAL'] === opt ? 'selected' : ''}>${opt}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="mapping-item">
+                            <label>DATE</label>
+                            <select id="mapping_${dbType}_DATE" data-db="${dbType}" data-type="DATE">
+                                ${TYPE_OPTIONS[dbType].filter(opt => opt.includes('DATE') || opt.includes('Date')).map(opt => `<option value="${opt}" ${DEFAULT_MAPPINGS[dbType]['DATE'] === opt ? 'selected' : ''}>${opt}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="mapping-item">
+                            <label>TIMESTAMP</label>
+                            <select id="mapping_${dbType}_TIMESTAMP" data-db="${dbType}" data-type="TIMESTAMP">
+                                ${TYPE_OPTIONS[dbType].filter(opt => opt.includes('TIMESTAMP') || opt.includes('TIMESTAMP') || opt.includes('DATETIME') || opt.includes('DateTime')).map(opt => `<option value="${opt}" ${DEFAULT_MAPPINGS[dbType]['TIMESTAMP'] === opt ? 'selected' : ''}>${opt}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="mapping-item">
+                            <label>INT</label>
+                            <select id="mapping_${dbType}_INT" data-db="${dbType}" data-type="INT">
+                                ${TYPE_OPTIONS[dbType].filter(opt => opt.includes('INT') || opt.includes('Int')).map(opt => `<option value="${opt}" ${DEFAULT_MAPPINGS[dbType]['INT'] === opt ? 'selected' : ''}>${opt}</option>`).join('')}
+                            </select>
+                        </div>
+                    </div>
+                `;
+                mappingContainer.appendChild(section);
+            });
+        }
+
+        function getCustomMappings() {
+            const rulesByDatabase = {};
+            const selects = document.querySelectorAll('.mapping-grid select');
+
+            selects.forEach(select => {
+                const dbType = select.dataset.db;
+                const type = select.dataset.type;
+                const value = select.value;
+
+                if (!rulesByDatabase[dbType]) {
+                    rulesByDatabase[dbType] = {};
+                }
+
+                rulesByDatabase[dbType][type] = value;
+            });
+
+            return rulesByDatabase;
+        }
+
+        // 初始化映射区域
+        renderMappings();
 
         async function generateDDL() {
             const sql = document.getElementById('sqlInput').value.trim();
@@ -537,10 +702,11 @@ FROM credit_usage_detail"></textarea>
             generateBtn.textContent = '生成中...';
 
             try {
+                const customMappings = getCustomMappings();
                 const response = await fetch('/api/generate-ddl', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sql, rulesByDatabase: {}, databaseTypes: dbTypes })
+                    body: JSON.stringify({ sql, rulesByDatabase: customMappings, databaseTypes: dbTypes })
                 });
 
                 const data = await response.json();
