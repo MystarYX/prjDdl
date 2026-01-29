@@ -319,7 +319,7 @@ def generate_ddl(fields, custom_rules, database_type):
     for idx, field in enumerate(adjusted_fields):
         padded_name = field['name'].ljust(max_name)
         padded_type = field['type'].ljust(max_type)
-        comment_text = f"COMMENT '{field['comment'].replace(\"'\", \"''\")}'"
+        comment_text = "COMMENT '" + field['comment'].replace("'", "''") + "'"
 
         if idx == 0:
             ddl_parts.append(f"    {padded_name} {padded_type} {comment_text}")
@@ -342,7 +342,7 @@ def generate_ddl(fields, custom_rules, database_type):
         ddl_parts.append("")
         ddl_parts.append("COMMENT ON TABLE 表名 IS '';")
         for field in adjusted_fields:
-            ddl_parts.append(f"COMMENT ON COLUMN 表名.{field['name']} IS '{field['comment'].replace(\"'\", \"''\")}';")
+            ddl_parts.append("COMMENT ON COLUMN 表名." + field['name'] + " IS '" + field['comment'].replace("'", "''") + "';")
 
     return '\n'.join(ddl_parts)
 
