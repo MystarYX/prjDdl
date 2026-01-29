@@ -1,585 +1,590 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Play, Copy, Download, Settings2, Database, Code2, RefreshCw, Plus, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
-interface InferenceRule {
-  keywords: string[];
-  matchType: 'contains' | 'equals' | 'regex';
-  targetField: 'name' | 'comment';
+interface FieldTypeInfo {
   dataType: string;
-  priority: number;
   precision?: number;
   scale?: number;
   length?: number;
 }
 
-const DEFAULT_RULES: Record<string, InferenceRule[]> = {
-  spark: [
-    { keywords: ['amt', 'amount', 'price', '金额', '价格'], matchType: 'contains', targetField: 'name', dataType: 'DECIMAL(24, 6)', priority: 1 },
-    { keywords: ['date', '日期'], matchType: 'contains', targetField: 'name', dataType: 'DATE', priority: 1 },
-    { keywords: ['time', 'timestamp', '时间'], matchType: 'contains', targetField: 'name', dataType: 'TIMESTAMP', priority: 1 },
-    { keywords: ['id', 'icode'], matchType: 'contains', targetField: 'name', dataType: 'STRING', priority: 1 },
-    { keywords: ['name', '名称', '描述', '备注'], matchType: 'contains', targetField: 'name', dataType: 'STRING', priority: 1 }
-  ],
-  mysql: [
-    { keywords: ['amt', 'amount', 'price', '金额', '价格'], matchType: 'contains', targetField: 'name', dataType: 'DECIMAL(24, 6)', priority: 1 },
-    { keywords: ['date', '日期'], matchType: 'contains', targetField: 'name', dataType: 'DATE', priority: 1 },
-    { keywords: ['time', 'timestamp', '时间'], matchType: 'contains', targetField: 'name', dataType: 'DATETIME', priority: 1 },
-    { keywords: ['id', 'icode'], matchType: 'contains', targetField: 'name', dataType: 'BIGINT', priority: 1 },
-    { keywords: ['name', '名称', '描述', '备注'], matchType: 'contains', targetField: 'name', dataType: 'VARCHAR(255)', priority: 1 }
-  ],
-  postgresql: [
-    { keywords: ['amt', 'amount', 'price', '金额', '价格'], matchType: 'contains', targetField: 'name', dataType: 'DECIMAL(24, 6)', priority: 1 },
-    { keywords: ['date', '日期'], matchType: 'contains', targetField: 'name', dataType: 'DATE', priority: 1 },
-    { keywords: ['time', 'timestamp', '时间'], matchType: 'contains', targetField: 'name', dataType: 'TIMESTAMP', priority: 1 },
-    { keywords: ['id', 'icode'], matchType: 'contains', targetField: 'name', dataType: 'BIGINT', priority: 1 },
-    { keywords: ['name', '名称', '描述', '备注'], matchType: 'contains', targetField: 'name', dataType: 'VARCHAR(255)', priority: 1 }
-  ],
-  starrocks: [
-    { keywords: ['amt', 'amount', 'price', '金额', '价格'], matchType: 'contains', targetField: 'name', dataType: 'DECIMAL(24, 6)', priority: 1 },
-    { keywords: ['date', '日期'], matchType: 'contains', targetField: 'name', dataType: 'DATE', priority: 1 },
-    { keywords: ['time', 'timestamp', '时间'], matchType: 'contains', targetField: 'name', dataType: 'DATETIME', priority: 1 },
-    { keywords: ['id', 'icode'], matchType: 'contains', targetField: 'name', dataType: 'BIGINT', priority: 1 },
-    { keywords: ['name', '名称', '描述', '备注'], matchType: 'contains', targetField: 'name', dataType: 'VARCHAR(255)', priority: 1 }
-  ],
-  clickhouse: [
-    { keywords: ['amt', 'amount', 'price', '金额', '价格'], matchType: 'contains', targetField: 'name', dataType: 'Decimal(24, 6)', priority: 1 },
-    { keywords: ['date', '日期'], matchType: 'contains', targetField: 'name', dataType: 'Date', priority: 1 },
-    { keywords: ['time', 'timestamp', '时间'], matchType: 'contains', targetField: 'name', dataType: 'DateTime', priority: 1 },
-    { keywords: ['id', 'icode'], matchType: 'contains', targetField: 'name', dataType: 'Int64', priority: 1 },
-    { keywords: ['name', '名称', '描述', '备注'], matchType: 'contains', targetField: 'name', dataType: 'String', priority: 1 }
-  ],
-  hive: [
-    { keywords: ['amt', 'amount', 'price', '金额', '价格'], matchType: 'contains', targetField: 'name', dataType: 'DECIMAL(24, 6)', priority: 1 },
-    { keywords: ['date', '日期'], matchType: 'contains', targetField: 'name', dataType: 'DATE', priority: 1 },
-    { keywords: ['time', 'timestamp', '时间'], matchType: 'contains', targetField: 'name', dataType: 'TIMESTAMP', priority: 1 },
-    { keywords: ['id', 'icode'], matchType: 'contains', targetField: 'name', dataType: 'BIGINT', priority: 1 },
-    { keywords: ['name', '名称', '描述', '备注'], matchType: 'contains', targetField: 'name', dataType: 'STRING', priority: 1 }
-  ],
-  doris: [
-    { keywords: ['amt', 'amount', 'price', '金额', '价格'], matchType: 'contains', targetField: 'name', dataType: 'DECIMAL(24, 6)', priority: 1 },
-    { keywords: ['date', '日期'], matchType: 'contains', targetField: 'name', dataType: 'DATE', priority: 1 },
-    { keywords: ['time', 'timestamp', '时间'], matchType: 'contains', targetField: 'name', dataType: 'DATETIME', priority: 1 },
-    { keywords: ['id', 'icode'], matchType: 'contains', targetField: 'name', dataType: 'BIGINT', priority: 1 },
-    { keywords: ['name', '名称', '描述', '备注'], matchType: 'contains', targetField: 'name', dataType: 'VARCHAR(255)', priority: 1 }
-  ]
-};
+interface UnifiedRule {
+  id: string;
+  keywords: string[];
+  matchType: 'contains' | 'equals' | 'regex';
+  targetField: 'name' | 'comment';
+  priority: number;
+  typeByDatabase: Record<string, FieldTypeInfo>;
+}
 
-const DB_LABELS = {
-  spark: 'Spark SQL',
-  mysql: 'MySQL',
-  postgresql: 'PostgreSQL',
-  starrocks: 'StarRocks',
-  clickhouse: 'ClickHouse',
-  hive: 'Hive',
-  doris: 'Doris'
-};
+const DATABASE_TYPES = [
+  { value: 'spark', label: 'Spark SQL' },
+  { value: 'mysql', label: 'MySQL' },
+  { value: 'postgresql', label: 'PostgreSQL' },
+  { value: 'starrocks', label: 'StarRocks' },
+  { value: 'clickhouse', label: 'ClickHouse' },
+  { value: 'hive', label: 'Hive' },
+  { value: 'doris', label: 'Doris' },
+];
 
-const ALL_TYPE_OPTIONS = {
-  spark: ['STRING', 'VARCHAR', 'CHAR', 'DECIMAL', 'DATE', 'TIMESTAMP', 'BIGINT', 'INT', 'FLOAT', 'DOUBLE', 'BOOLEAN', 'BINARY', 'ARRAY', 'MAP', 'STRUCT'],
-  mysql: ['TINYINT', 'SMALLINT', 'MEDIUMINT', 'INT', 'INTEGER', 'BIGINT', 'FLOAT', 'DOUBLE', 'DECIMAL', 'NUMERIC', 'DATE', 'DATETIME', 'TIMESTAMP', 'TIME', 'YEAR', 'CHAR', 'VARCHAR', 'BINARY', 'VARBINARY', 'TINYBLOB', 'BLOB', 'MEDIUMBLOB', 'LONGBLOB', 'TINYTEXT', 'TEXT', 'MEDIUMTEXT', 'LONGTEXT', 'ENUM', 'SET', 'BOOLEAN', 'JSON'],
-  postgresql: ['SMALLINT', 'INTEGER', 'BIGINT', 'DECIMAL', 'NUMERIC', 'REAL', 'DOUBLE PRECISION', 'SMALLSERIAL', 'SERIAL', 'BIGSERIAL', 'CHARACTER', 'VARCHAR', 'TEXT', 'BYTEA', 'TIMESTAMP', 'DATE', 'TIME', 'BOOLEAN', 'UUID', 'JSON', 'JSONB', 'ARRAY'],
-  starrocks: ['TINYINT', 'SMALLINT', 'INT', 'BIGINT', 'LARGEINT', 'FLOAT', 'DOUBLE', 'DECIMAL', 'DATE', 'DATETIME', 'CHAR', 'VARCHAR', 'STRING', 'BOOLEAN', 'JSON', 'BITMAP', 'HLL', 'PERCENTILE', 'ARRAY', 'MAP', 'STRUCT'],
-  clickhouse: ['UInt8', 'UInt16', 'UInt32', 'UInt64', 'Int8', 'Int16', 'Int32', 'Int64', 'Float32', 'Float64', 'String', 'FixedString', 'Date', 'DateTime', 'DateTime64', 'Decimal', 'UUID', 'Enum8', 'Enum16', 'Array', 'Tuple', 'Map', 'Nested', 'Nullable', 'Bool'],
-  hive: ['TINYINT', 'SMALLINT', 'INT', 'BIGINT', 'BOOLEAN', 'FLOAT', 'DOUBLE', 'DECIMAL', 'STRING', 'VARCHAR', 'CHAR', 'DATE', 'TIMESTAMP', 'INTERVAL', 'BINARY', 'ARRAY', 'MAP', 'STRUCT', 'UNIONTYPE'],
-  doris: ['TINYINT', 'SMALLINT', 'INT', 'BIGINT', 'LARGEINT', 'FLOAT', 'DOUBLE', 'DECIMAL', 'DATE', 'DATETIME', 'CHAR', 'VARCHAR', 'STRING', 'BOOLEAN', 'JSON', 'BITMAP', 'HLL', 'PERCENTILE', 'ARRAY', 'MAP', 'STRUCT']
-};
+const DEFAULT_RULES: UnifiedRule[] = [
+  {
+    id: '1',
+    keywords: ['fcytp', 'scytp', '币种'],
+    matchType: 'contains',
+    targetField: 'name',
+    priority: 1,
+    typeByDatabase: {
+      spark: { dataType: 'STRING' },
+      mysql: { dataType: 'VARCHAR', length: 255 },
+      postgresql: { dataType: 'TEXT' },
+      clickhouse: { dataType: 'String' },
+    },
+  },
+  {
+    id: '2',
+    keywords: ['amt', 'amount', 'price', '金额', '价格'],
+    matchType: 'contains',
+    targetField: 'name',
+    priority: 2,
+    typeByDatabase: {
+      spark: { dataType: 'DECIMAL', precision: 24, scale: 6 },
+      mysql: { dataType: 'DECIMAL', precision: 24, scale: 6 },
+      postgresql: { dataType: 'DECIMAL', precision: 24, scale: 6 },
+      clickhouse: { dataType: 'Decimal', precision: 24, scale: 6 },
+      starrocks: { dataType: 'DECIMAL', precision: 24, scale: 6 },
+    },
+  },
+  {
+    id: '3',
+    keywords: ['qty', 'quantity', 'cnt', 'count', '数量'],
+    matchType: 'contains',
+    targetField: 'name',
+    priority: 3,
+    typeByDatabase: {
+      spark: { dataType: 'DECIMAL', precision: 24, scale: 6 },
+      mysql: { dataType: 'DECIMAL', precision: 24, scale: 6 },
+      postgresql: { dataType: 'DECIMAL', precision: 24, scale: 6 },
+      clickhouse: { dataType: 'Decimal', precision: 24, scale: 6 },
+    },
+  },
+  {
+    id: '4',
+    keywords: ['org', 'trcl', 'cust', 'stff', 'user', '部门', '客户', '用户'],
+    matchType: 'contains',
+    targetField: 'name',
+    priority: 4,
+    typeByDatabase: {
+      spark: { dataType: 'STRING' },
+      mysql: { dataType: 'VARCHAR', length: 255 },
+      postgresql: { dataType: 'TEXT' },
+      clickhouse: { dataType: 'String' },
+    },
+  },
+  {
+    id: '5',
+    keywords: ['name', 'dscr', 'rmrk', '名称', '描述', '备注'],
+    matchType: 'contains',
+    targetField: 'name',
+    priority: 5,
+    typeByDatabase: {
+      spark: { dataType: 'STRING' },
+      mysql: { dataType: 'VARCHAR', length: 255 },
+      postgresql: { dataType: 'TEXT' },
+      clickhouse: { dataType: 'String' },
+    },
+  },
+  {
+    id: '6',
+    keywords: ['date', '日期'],
+    matchType: 'contains',
+    targetField: 'name',
+    priority: 6,
+    typeByDatabase: {
+      spark: { dataType: 'DATE' },
+      mysql: { dataType: 'DATE' },
+      postgresql: { dataType: 'DATE' },
+      clickhouse: { dataType: 'Date' },
+    },
+  },
+  {
+    id: '7',
+    keywords: ['time', 'timestamp', '时间'],
+    matchType: 'contains',
+    targetField: 'name',
+    priority: 7,
+    typeByDatabase: {
+      spark: { dataType: 'TIMESTAMP' },
+      mysql: { dataType: 'DATETIME' },
+      postgresql: { dataType: 'TIMESTAMP' },
+      clickhouse: { dataType: 'DateTime' },
+      starrocks: { dataType: 'DATETIME' },
+    },
+  },
+];
+
+const EXAMPLE_SQL = `-- 账户信息表查询
+SELECT
+  icode,
+  org,
+  acct,
+  fcyc,
+  fcytp,
+  ccyc,
+  ccytp,
+  amt,
+  amt_sc,
+  amt_tc,
+  trdt,
+  tms,
+  mode,
+  flag,
+  biz_dscr,
+  cust_dscr
+FROM account`;
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState('generator');
-  const [sqlInput, setSqlInput] = useState('');
-  const [ddlOutput, setDdlOutput] = useState('');
+  const { toast } = useToast();
+  const [sqlInput, setSqlInput] = useState(EXAMPLE_SQL);
+  const [unifiedRules, setUnifiedRules] = useState<UnifiedRule[]>(DEFAULT_RULES);
+  const [selectedDatabases, setSelectedDatabases] = useState<string[]>(['spark', 'mysql', 'clickhouse']);
+  const [generatedDDL, setGeneratedDDL] = useState<{ ddl?: string; ddls?: Array<{ label: string; ddl: string }> }>({});
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [selectedDbTypes, setSelectedDbTypes] = useState<string[]>(['spark']);
-  const [customRules, setCustomRules] = useState<Record<string, InferenceRule[]>>(DEFAULT_RULES);
-  const [saveStatus, setSaveStatus] = useState('');
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
-  // 页面加载时从 localStorage 恢复规则
-  useEffect(() => {
-    const saved = localStorage.getItem('ddl_generator_rules');
-    if (saved) {
-      try {
-        setCustomRules(JSON.parse(saved));
-      } catch (e) {
-        console.error('Failed to load rules:', e);
-      }
-    }
-  }, []);
-
-  // 保存规则到 localStorage
-  const saveRules = () => {
-    try {
-      localStorage.setItem('ddl_generator_rules', JSON.stringify(customRules));
-      setSaveStatus('✓ 已保存');
-      setTimeout(() => setSaveStatus(''), 2000);
-    } catch (e) {
-      console.error('Failed to save rules:', e);
-    }
-  };
-
-  const handleGenerate = async () => {
-    if (!sqlInput.trim()) {
-      setError('请输入SQL查询语句');
-      return;
-    }
-
-    if (selectedDbTypes.length === 0) {
-      setError('请至少选择一个数据库类型');
-      return;
-    }
-
+  async function generate() {
     setLoading(true);
-    setError('');
-
     try {
       const response = await fetch('/api/generate-ddl', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sql: sqlInput,
-          rulesByDatabase: customRules,
-          databaseTypes: selectedDbTypes
-        })
+          unifiedRules: unifiedRules,
+          databaseTypes: selectedDatabases,
+        }),
       });
-
-      if (!response.ok) {
-        throw new Error('生成失败');
-      }
-
       const data = await response.json();
-      if (data.ddls) {
-        setDdlOutput(data.ddls.map((d: any) => `-- ${d.label}\n${d.ddl}`).join('\n\n'));
-      } else {
-        setDdlOutput(data.ddl);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '生成失败');
+      setGeneratedDDL(data);
+      toast({ title: '生成成功', description: 'DDL已生成' });
+    } catch (error) {
+      toast({ title: '生成失败', description: error instanceof Error ? error.message : '未知错误', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(ddlOutput);
-  };
+  function handleCopy(text: string) {
+    navigator.clipboard.writeText(text);
+    toast({ title: '已复制', description: 'DDL已复制到剪贴板' });
+  }
 
-  const handleExportRules = () => {
-    const data = {
-      version: '1.0',
-      exportTime: new Date().toISOString(),
-      rules: customRules
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  function handleDownload() {
+    const ddlText = generatedDDL.ddl ? generatedDDL.ddl : (generatedDDL.ddls?.map(d => `-- ${d.label}\n${d.ddl}`).join('\n\n') || '');
+    const blob = new Blob([ddlText], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `ddl-rules-${new Date().toISOString().slice(0, 10)}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'ddl.sql';
+    a.click();
+  }
 
-  const handleImportRules = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const data = JSON.parse(event.target?.result as string);
-        if (data.rules && confirm('导入将覆盖当前规则，确定继续吗？')) {
-          setCustomRules(data.rules);
-          saveRules();
-        }
-      } catch (err) {
-        alert('导入失败: ' + (err instanceof Error ? err.message : '未知错误'));
-      }
+  function addRule() {
+    const newRule: UnifiedRule = {
+      id: Date.now().toString(),
+      keywords: [''],
+      matchType: 'contains',
+      targetField: 'name',
+      priority: unifiedRules.length + 1,
+      typeByDatabase: {
+        spark: { dataType: 'STRING' },
+        mysql: { dataType: 'VARCHAR', length: 255 },
+        postgresql: { dataType: 'TEXT' },
+        clickhouse: { dataType: 'String' },
+      },
     };
-    reader.readAsText(file);
-    e.target.value = '';
-  };
+    setUnifiedRules([...unifiedRules, newRule]);
+  }
 
-  const handleResetRules = () => {
-    if (confirm('确定要重置所有规则为默认值吗？')) {
-      setCustomRules(JSON.parse(JSON.stringify(DEFAULT_RULES)));
-      saveRules();
-    }
-  };
+  function updateRule(id: string, field: keyof UnifiedRule, value: any) {
+    setUnifiedRules(rules => rules.map(rule => rule.id === id ? { ...rule, [field]: value } : rule));
+  }
 
-  const addRule = (dbType: string) => {
-    setCustomRules(prev => ({
-      ...prev,
-      [dbType]: [...(prev[dbType] || []), {
-        keywords: [],
-        matchType: 'contains' as const,
-        targetField: 'name' as const,
-        dataType: 'STRING',
-        priority: 999
-      }]
+  function updateKeyword(ruleId: string, index: number, value: string) {
+    setUnifiedRules(rules => rules.map(rule => {
+      if (rule.id !== ruleId) return rule;
+      const newKeywords = [...rule.keywords];
+      newKeywords[index] = value;
+      return { ...rule, keywords: newKeywords };
     }));
-    saveRules();
-  };
+  }
 
-  const deleteRule = (dbType: string, index: number) => {
-    setCustomRules(prev => {
-      const newRules = { ...prev };
-      newRules[dbType] = newRules[dbType].filter((_, i) => i !== index);
-      return newRules;
-    });
-    saveRules();
-  };
+  function addKeyword(ruleId: string) {
+    setUnifiedRules(rules => rules.map(rule => rule.id === ruleId ? { ...rule, keywords: [...rule.keywords, ''] } : rule));
+  }
 
-  const updateRule = (dbType: string, index: number, updates: Partial<InferenceRule>) => {
-    setCustomRules(prev => {
-      const newRules = { ...prev };
-      newRules[dbType] = newRules[dbType].map((rule, i) =>
-        i === index ? { ...rule, ...updates } : rule
-      );
-      return newRules;
-    });
-    saveRules();
-  };
+  function removeKeyword(ruleId: string, index: number) {
+    setUnifiedRules(rules => rules.map(rule => {
+      if (rule.id !== ruleId) return rule;
+      return { ...rule, keywords: rule.keywords.filter((_, i) => i !== index) };
+    }));
+  }
 
-  const hasTypeConfig = (dataType: string) => {
-    const upper = dataType.toUpperCase();
-    return upper.includes('VARCHAR') || upper.includes('CHAR') ||
-           upper.includes('DECIMAL') || upper.includes('NUMERIC') ||
-           upper.includes('FLOAT') || upper.includes('DOUBLE');
-  };
+  function deleteRule(id: string) {
+    setUnifiedRules(rules => rules.filter(rule => rule.id !== id));
+  }
 
-  const renderTypeConfig = (dbType: string, rule: InferenceRule, index: number) => {
-    const upper = rule.dataType.toUpperCase();
+  function updateRuleDbType(ruleId: string, dbType: string, field: string, value: any) {
+    setUnifiedRules(rules => rules.map(rule => {
+      if (rule.id !== ruleId) {
+        return { ...rule, typeByDatabase: { ...rule.typeByDatabase, [dbType]: { ...rule.typeByDatabase[dbType], [field]: value } } };
+      }
+      return { ...rule, typeByDatabase: { ...rule.typeByDatabase, [dbType]: { ...rule.typeByDatabase[dbType], [field]: value } } };
+    }));
+  }
 
-    if (upper.includes('DECIMAL') || upper.includes('NUMERIC')) {
-      return (
-        <div className="flex gap-2 mt-2">
-          <div className="flex-1">
-            <label className="text-xs text-gray-500 block mb-1">精度</label>
-            <input
-              type="number"
-              value={rule.precision || 24}
-              onChange={(e) => updateRule(dbType, index, { precision: parseInt(e.target.value) })}
-              className="w-full px-2 py-1 text-sm border rounded"
-              min="1"
-              max="65"
-            />
-          </div>
-          <div className="flex-1">
-            <label className="text-xs text-gray-500 block mb-1">小数位</label>
-            <input
-              type="number"
-              value={rule.scale || 6}
-              onChange={(e) => updateRule(dbType, index, { scale: parseInt(e.target.value) })}
-              className="w-full px-2 py-1 text-sm border rounded"
-              min="0"
-              max="30"
-            />
-          </div>
-        </div>
-      );
-    } else if (upper.includes('VARCHAR') || upper.includes('CHAR')) {
-      return (
-        <div className="mt-2">
-          <label className="text-xs text-gray-500 block mb-1">长度</label>
-          <input
-            type="number"
-            value={rule.length || 255}
-            onChange={(e) => updateRule(dbType, index, { length: parseInt(e.target.value) })}
-            className="w-full px-2 py-1 text-sm border rounded"
-            min="1"
-            max="65535"
-          />
-        </div>
-      );
-    } else if (upper.includes('FLOAT') || upper.includes('DOUBLE')) {
-      return (
-        <div className="mt-2">
-          <label className="text-xs text-gray-500 block mb-1">精度（可选）</label>
-          <input
-            type="number"
-            value={rule.precision || ''}
-            onChange={(e) => updateRule(dbType, index, {
-              precision: e.target.value ? parseInt(e.target.value) : undefined
-            })}
-            className="w-full px-2 py-1 text-sm border rounded"
-            min="1"
-            max="255"
-            placeholder="留空使用默认值"
-          />
-        </div>
-      );
-    }
-    return null;
-  };
+  function addDatabaseToRule(ruleId: string, dbType: string) {
+    setUnifiedRules(rules => rules.map(rule => {
+      if (rule.id !== ruleId && !rule.typeByDatabase[dbType]) {
+        return { ...rule, typeByDatabase: { ...rule.typeByDatabase, [dbType]: { dataType: 'STRING' } } };
+      }
+      return rule;
+    }));
+  }
+
+  function removeDatabaseFromRule(ruleId: string, dbType: string) {
+    setUnifiedRules(rules => rules.map(rule => {
+      if (rule.id === ruleId) {
+        const newTypes = { ...rule.typeByDatabase };
+        delete newTypes[dbType];
+        return { ...rule, typeByDatabase: newTypes };
+      }
+      return rule;
+    }));
+  }
+
+  function moveRule(index: number, direction: 'up' | 'down') {
+    const newRules = [...unifiedRules];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= newRules.length) return;
+    [newRules[index], newRules[targetIndex]] = [newRules[targetIndex], newRules[index]];
+    setUnifiedRules(newRules);
+  }
+
+  function resetRules() {
+    setUnifiedRules(DEFAULT_RULES);
+    toast({ title: '已重置', description: '规则已恢复为默认值' });
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 font-sans">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-center text-gray-800 mb-2">SQL建表语句生成器</h1>
-        <p className="text-center text-gray-600 mb-8">自动解析SQL查询，生成符合规范的建表语句</p>
-
-        {/* 标签页导航 */}
-        <div className="flex gap-2 mb-6 border-b-2 border-gray-300">
-          <button
-            onClick={() => setActiveTab('generator')}
-            className={`px-6 py-3 font-medium rounded-t-lg transition-all ${
-              activeTab === 'generator'
-                ? 'bg-blue-600 text-white border-t border-l border-r border-blue-600'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-          >
-            DDL生成器
-          </button>
-          <button
-            onClick={() => setActiveTab('rules')}
-            className={`px-6 py-3 font-medium rounded-t-lg transition-all ${
-              activeTab === 'rules'
-                ? 'bg-blue-600 text-white border-t border-l border-r border-blue-600'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-          >
-            规则管理器
-          </button>
-        </div>
-
-        {/* DDL生成器标签页 */}
-        {activeTab === 'generator' && (
-          <>
-            {/* 数据库类型选择 */}
-            <div className="bg-white rounded-xl p-6 mb-6 shadow-sm">
-              <h3 className="font-semibold text-gray-800 mb-4">目标数据库类型</h3>
-              <div className="flex flex-wrap gap-3">
-                {Object.entries(DB_LABELS).map(([value, label]) => (
-                  <label
-                    key={value}
-                    className="flex items-center gap-2 px-4 py-2 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
-                  >
-                    <input
-                      type="checkbox"
-                      value={value}
-                      checked={selectedDbTypes.includes(value)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedDbTypes([...selectedDbTypes, value]);
-                        } else {
-                          setSelectedDbTypes(selectedDbTypes.filter(t => t !== value));
-                        }
-                      }}
-                      className="rounded"
-                    />
-                    {label}
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {/* SQL输入和DDL输出 */}
-            <div className="grid grid-cols-2 gap-6">
-              <div className="bg-white rounded-xl p-6 shadow-sm">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="font-semibold text-gray-800">输入SQL查询语句</h3>
-                  <span className="text-gray-500 text-sm">{sqlInput.length} 字符</span>
-                </div>
-                <textarea
-                  value={sqlInput}
-                  onChange={(e) => setSqlInput(e.target.value)}
-                  placeholder="请输入SELECT查询语句或字段列表..."
-                  className="w-full h-96 p-4 border rounded-lg font-mono text-sm resize-none"
-                />
-                <button
-                  onClick={handleGenerate}
-                  disabled={loading}
-                  className="w-full mt-4 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-400 transition-colors"
-                >
-                  {loading ? '生成中...' : '生成建表语句'}
-                </button>
-                {error && (
-                  <div className="mt-4 p-3 bg-red-50 text-red-600 rounded-lg text-sm">{error}</div>
-                )}
-              </div>
-
-              <div className="bg-white rounded-xl p-6 shadow-sm">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="font-semibold text-gray-800">
-                    {selectedDbTypes.length > 1 ? '建表语句' : DB_LABELS[selectedDbTypes[0]] + ' 建表语句'}
-                  </h3>
-                  <button
-                    onClick={handleCopy}
-                    className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 transition-colors"
-                  >
-                    复制
-                  </button>
-                </div>
-                <textarea
-                  value={ddlOutput}
-                  readOnly
-                  placeholder="生成的建表语句将显示在这里..."
-                  className="w-full h-96 p-4 border rounded-lg font-mono text-sm resize-none bg-gray-50"
-                />
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* 规则管理器标签页 */}
-        {activeTab === 'rules' && (
-          <div className="bg-white rounded-xl p-6 shadow-sm">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-semibold text-gray-800">字段类型推断规则配置</h3>
-              <span className="text-gray-500 text-sm">
-                已选择 {selectedDbTypes.length} 个数据库类型
-                {saveStatus && <span className="ml-2 text-green-600">{saveStatus}</span>}
-              </span>
-            </div>
-            <p className="text-gray-600 mb-4 text-sm">
-              为每种数据库类型配置自定义的字段类型推断规则，根据字段名或注释自动匹配目标类型。
-            </p>
-
-            {/* 操作按钮 */}
-            <div className="flex gap-3 mb-6 flex-wrap">
-              <button
-                onClick={handleExportRules}
-                className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors"
-              >
-                📤 导出配置
-              </button>
-              <button
-                onClick={() => document.getElementById('importFile')?.click()}
-                className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
-              >
-                📥 导入配置
-              </button>
-              <button
-                onClick={handleResetRules}
-                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-              >
-                🔄 重置规则
-              </button>
-              <input
-                id="importFile"
-                type="file"
-                accept=".json"
-                className="hidden"
-                onChange={handleImportRules}
-              />
-            </div>
-
-            <div className="bg-blue-50 p-4 rounded-lg mb-6 text-sm text-blue-700">
-              <strong>💡 提示：</strong> 规则会自动保存到浏览器，刷新页面后可继续使用。
-            </div>
-
-            {/* 规则列表 */}
-            {selectedDbTypes.length === 0 ? (
-              <p className="text-gray-500 text-center py-8">请先在"DDL生成器"页面选择目标数据库类型</p>
-            ) : (
-              selectedDbTypes.map(dbType => (
-                <div key={dbType} className="mb-6 border rounded-xl p-4">
-                  <h4 className="font-semibold text-blue-600 mb-4">{DB_LABELS[dbType]} 字段类型推断规则</h4>
-
-                  {/* 规则列表 */}
-                  <div className="space-y-3">
-                    {(customRules[dbType] || []).map((rule, index) => (
-                      <div key={index} className="grid grid-cols-[1.5fr_0.8fr_0.8fr_1.5fr_70px_40px] gap-3 p-3 bg-gray-50 rounded-lg items-start">
-                        {/* 关键词 */}
-                        <div>
-                          <label className="text-xs text-gray-500 block mb-1">关键词</label>
-                          <input
-                            type="text"
-                            value={rule.keywords.join(', ')}
-                            onChange={(e) => updateRule(dbType, index, {
-                              keywords: e.target.value.split(',').map(k => k.trim()).filter(k => k)
-                            })}
-                            placeholder="amt, amount"
-                            className="w-full px-2 py-1 text-sm border rounded"
+    <main className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      <div className="container mx-auto p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900">DDL 生成器</h1>
+            <p className="text-slate-600 mt-2">智能推断字段类型，支持多种数据库</p>
+          </div>
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={() => setSqlInput(EXAMPLE_SQL)}>
+              <RefreshCw className="w-4 h-4 mr-2" />
+              示例SQL
+            </Button>
+            <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <Settings2 className="w-4 h-4 mr-2" />
+                  规则设置
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-5xl max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle className="text-xl font-bold flex items-center gap-2">
+                    <Database className="w-5 h-5" />
+                    字段类型推断规则（统一配置）
+                  </DialogTitle>
+                  <DialogDescription>配置字段名称匹配规则及在不同数据库中的类型映射</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 mt-4">
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <Label className="text-base font-semibold">目标数据库:</Label>
+                    <div className="flex gap-2 flex-wrap">
+                      {DATABASE_TYPES.map(db => (
+                        <div key={db.value} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`db-${db.value}`}
+                            checked={selectedDatabases.includes(db.value)}
+                            onCheckedChange={checked => {
+                              setSelectedDatabases(prev => checked ? [...prev, db.value] : prev.filter(d => d !== db.value));
+                            }}
                           />
+                          <label htmlFor={`db-${db.value}`} className="text-sm">{db.label}</label>
                         </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    {unifiedRules.map((rule, index) => (
+                      <Card key={rule.id} className="border-slate-200">
+                        <CardContent className="pt-6 space-y-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="flex flex-col gap-1">
+                                <Button variant="ghost" size="sm" className="p-0 h-6 w-6" onClick={() => moveRule(index, 'up')} disabled={index === 0}>
+                                  <ChevronUp className="w-4 h-4" />
+                                </Button>
+                                <Button variant="ghost" size="sm" className="p-0 h-6 w-6" onClick={() => moveRule(index, 'down')} disabled={index === unifiedRules.length - 1}>
+                                  <ChevronDown className="w-4 h-4" />
+                                </Button>
+                              </div>
+                              <Badge variant="outline">优先级 {rule.priority}</Badge>
+                            </div>
+                            <Button variant="ghost" size="sm" onClick={() => deleteRule(rule.id)}>
+                              <Trash2 className="w-4 h-4 text-red-500" />
+                            </Button>
+                          </div>
 
-                        {/* 匹配方式 */}
-                        <div>
-                          <label className="text-xs text-gray-500 block mb-1">匹配方式</label>
-                          <select
-                            value={rule.matchType}
-                            onChange={(e) => updateRule(dbType, index, { matchType: e.target.value as any })}
-                            className="w-full px-2 py-1 text-sm border rounded"
-                          >
-                            <option value="contains">包含</option>
-                            <option value="equals">等于</option>
-                            <option value="regex">正则</option>
-                          </select>
-                        </div>
-
-                        {/* 匹配字段 */}
-                        <div>
-                          <label className="text-xs text-gray-500 block mb-1">匹配字段</label>
-                          <select
-                            value={rule.targetField}
-                            onChange={(e) => updateRule(dbType, index, { targetField: e.target.value as any })}
-                            className="w-full px-2 py-1 text-sm border rounded"
-                          >
-                            <option value="name">字段名</option>
-                            <option value="comment">字段注释</option>
-                          </select>
-                        </div>
-
-                        {/* 目标类型 */}
-                        <div>
-                          <label className="text-xs text-gray-500 block mb-1">目标类型</label>
-                          <div className="flex gap-2 items-end">
-                            <div className="flex-1">
-                              <select
-                                value={rule.dataType}
-                                onChange={(e) => updateRule(dbType, index, { dataType: e.target.value })}
-                                className="w-full px-2 py-1 text-sm border rounded"
-                              >
-                                {(ALL_TYPE_OPTIONS[dbType as keyof typeof ALL_TYPE_OPTIONS] || []).map(opt => (
-                                  <option key={opt} value={opt}>{opt}</option>
-                                ))}
-                              </select>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label>关键词（用逗号分隔）</Label>
+                              <Input
+                                value={rule.keywords.join(', ')}
+                                onChange={e => updateRule(rule.id, 'keywords', e.target.value.split(',').map(k => k.trim()))}
+                                placeholder="amt, amount, 金额"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>优先级</Label>
+                              <Input
+                                type="number"
+                                value={rule.priority}
+                                onChange={e => updateRule(rule.id, 'priority', parseInt(e.target.value))}
+                                min={1}
+                              />
                             </div>
                           </div>
-                          {renderTypeConfig(dbType, rule, index)}
-                        </div>
 
-                        {/* 优先级 */}
-                        <div>
-                          <label className="text-xs text-gray-500 block mb-1">优先级</label>
-                          <input
-                            type="number"
-                            value={rule.priority}
-                            onChange={(e) => updateRule(dbType, index, { priority: parseInt(e.target.value) })}
-                            className="w-full px-2 py-1 text-sm border rounded"
-                            min="0"
-                            max="999"
-                          />
-                        </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label>匹配方式</Label>
+                              <Select value={rule.matchType} onValueChange={v => updateRule(rule.id, 'matchType', v)}>
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="contains">包含</SelectItem>
+                                  <SelectItem value="equals">等于</SelectItem>
+                                  <SelectItem value="regex">正则</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-2">
+                              <Label>匹配字段</Label>
+                              <Select value={rule.targetField} onValueChange={v => updateRule(rule.id, 'targetField', v)}>
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="name">字段名</SelectItem>
+                                  <SelectItem value="comment">字段注释</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
 
-                        {/* 删除按钮 */}
-                        <div className="flex items-end">
-                          <button
-                            onClick={() => deleteRule(dbType, index)}
-                            className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700"
-                          >
-                            删除
-                          </button>
-                        </div>
-                      </div>
+                          <div className="space-y-3">
+                            <Label className="text-base font-semibold">数据库类型映射</Label>
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                              {DATABASE_TYPES.map(db => {
+                                const dbType = rule.typeByDatabase[db.value];
+                                if (!dbType) return null;
+                                return (
+                                  <div key={db.value} className="border rounded-lg p-3 space-y-2 bg-slate-50">
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-medium">{db.label}</span>
+                                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500" onClick={() => removeDatabaseFromRule(rule.id, db.value)}>
+                                        <Trash2 className="w-3 h-3" />
+                                      </Button>
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <Select value={dbType.dataType} onValueChange={v => updateRuleDbType(rule.id, db.value, 'dataType', v)}>
+                                        <SelectTrigger className="flex-1">
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {['STRING', 'VARCHAR', 'TEXT', 'DECIMAL', 'FLOAT', 'DOUBLE', 'INT', 'BIGINT', 'DATE', 'DATETIME', 'TIMESTAMP', 'BOOLEAN', 'Char', 'Decimal', 'DateTime', 'Date', 'String'].map(t => (
+                                            <SelectItem key={t} value={t}>{t}</SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                      {(dbType.dataType.toUpperCase().includes('DECIMAL') || dbType.dataType === 'Decimal') && (
+                                        <>
+                                          <Input type="number" placeholder="精度" value={dbType.precision || ''} onChange={e => updateRuleDbType(rule.id, db.value, 'precision', e.target.value ? parseInt(e.target.value) : undefined)} className="w-20" />
+                                          <Input type="number" placeholder="小数位" value={dbType.scale || ''} onChange={e => updateRuleDbType(rule.id, db.value, 'scale', e.target.value ? parseInt(e.target.value) : undefined)} className="w-20" />
+                                        </>
+                                      )}
+                                      {(dbType.dataType.toUpperCase().includes('VARCHAR') || dbType.dataType === 'Char') && (
+                                        <Input type="number" placeholder="长度" value={dbType.length || ''} onChange={e => updateRuleDbType(rule.id, db.value, 'length', e.target.value ? parseInt(e.target.value) : undefined)} className="w-20" />
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            <Button variant="outline" size="sm" className="w-full" onClick={() => addDatabaseToRule(rule.id, 'starrocks')}>
+                              <Plus className="w-4 h-4 mr-2" />
+                              添加数据库类型
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
                     ))}
                   </div>
 
-                  <button
-                    onClick={() => addRule(dbType)}
-                    className="mt-4 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                  >
-                    + 添加规则
-                  </button>
+                  <div className="flex gap-3">
+                    <Button onClick={addRule} className="flex-1">
+                      <Plus className="w-4 h-4 mr-2" />
+                      添加规则
+                    </Button>
+                    <Button variant="outline" onClick={resetRules}>
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      重置默认
+                    </Button>
+                  </div>
                 </div>
-              ))
-            )}
+                <DialogFooter className="mt-4">
+                  <Button onClick={() => setSettingsOpen(false)}>确定</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
-        )}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card className="h-[calc(100vh-240px)] flex flex-col">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Code2 className="w-5 h-5" />
+                输入SQL
+              </CardTitle>
+              <CardDescription>支持SELECT语句或字段列表</CardDescription>
+            </CardHeader>
+            <CardContent className="flex-1 flex flex-col">
+              <Textarea
+                placeholder="-- 支持单行或多行注释
+SELECT
+  icode,
+  org,
+  acct,
+  amt,
+  trdt
+FROM table_name"
+                value={sqlInput}
+                onChange={e => setSqlInput(e.target.value)}
+                className="flex-1 font-mono text-sm resize-none"
+              />
+              <div className="flex gap-3 mt-4">
+                <Button onClick={generate} disabled={loading || !sqlInput.trim()} className="flex-1">
+                  {loading ? '生成中...' : <><Play className="w-4 h-4 mr-2" />生成DDL</>}
+                </Button>
+                <div className="flex gap-2 flex-wrap">
+                  {DATABASE_TYPES.map(db => (
+                    <Button
+                      key={db.value}
+                      variant={selectedDatabases.includes(db.value) ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setSelectedDatabases(prev => prev.includes(db.value) ? prev.filter(d => d !== db.value) : [...prev, db.value])}
+                    >
+                      {db.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="h-[calc(100vh-240px)] flex flex-col">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Database className="w-5 h-5" />
+                生成的DDL
+              </CardTitle>
+              <CardDescription>DDL语句</CardDescription>
+            </CardHeader>
+            <CardContent className="flex-1 flex flex-col">
+              {generatedDDL.ddl || (generatedDDL.ddls && generatedDDL.ddls.length > 0) ? (
+                <Tabs defaultValue={generatedDDL.ddl ? 'single' : 'multiple'} className="flex-1 flex flex-col">
+                  <TabsList className="grid w-full" style={{ gridTemplateColumns: generatedDDL.ddl ? '1fr' : `repeat(${generatedDDL.ddls?.length || 1}, 1fr)` }}>
+                    {generatedDDL.ddl && <TabsTrigger value="single">DDL</TabsTrigger>}
+                    {generatedDDL.ddls?.map((ddl, index) => (
+                      <TabsTrigger key={index} value={ddl.label}>{ddl.label}</TabsTrigger>
+                    ))}
+                  </TabsList>
+
+                  {generatedDDL.ddl && (
+                    <TabsContent value="single" className="flex-1 mt-2">
+                      <div className="relative h-full">
+                        <Textarea
+                          value={generatedDDL.ddl}
+                          readOnly
+                          className="h-full font-mono text-sm resize-none"
+                        />
+                        <div className="absolute top-2 right-2 flex gap-2">
+                          <Button size="sm" variant="secondary" onClick={() => handleCopy(generatedDDL.ddl || '')}>
+                            <Copy className="w-4 h-4 mr-2" />
+                            复制
+                          </Button>
+                          <Button size="sm" variant="secondary" onClick={handleDownload}>
+                            <Download className="w-4 h-4 mr-2" />
+                            下载
+                          </Button>
+                        </div>
+                      </div>
+                    </TabsContent>
+                  )}
+
+                  {generatedDDL.ddls?.map((ddl, index) => (
+                    <TabsContent key={index} value={ddl.label} className="flex-1 mt-2">
+                      <div className="relative h-full">
+                        <Textarea
+                          value={ddl.ddl}
+                          readOnly
+                          className="h-full font-mono text-sm resize-none"
+                        />
+                        <div className="absolute top-2 right-2 flex gap-2">
+                          <Button size="sm" variant="secondary" onClick={() => handleCopy(ddl.ddl)}>
+                            <Copy className="w-4 h-4 mr-2" />
+                            复制
+                          </Button>
+                        </div>
+                      </div>
+                    </TabsContent>
+                  ))}
+                </Tabs>
+              ) : (
+                <div className="flex-1 flex items-center justify-center text-slate-400">
+                  <div className="text-center">
+                    <Code2 className="w-16 h-16 mx-auto mb-4 opacity-20" />
+                    <p>请输入SQL并点击生成</p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
-    </div>
+    </main>
   );
 }
