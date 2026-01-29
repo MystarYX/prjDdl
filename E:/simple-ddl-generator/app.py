@@ -543,41 +543,50 @@ class APIHandler(SimpleHTTPRequestHandler):
     <title>SQL建表语句生成器</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background: #f5f5f5; padding: 20px; }
         .container { max-width: 1400px; margin: 0 auto; }
-        h1 { text-align: center; color: #333; margin-bottom: 10px; }
+        h1 { text-align: center; color: #333; margin-bottom: 10px; font-weight: 700; }
         .subtitle { text-align: center; color: #666; margin-bottom: 30px; }
-        .card { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .card { background: white; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
         .card-title { font-weight: 600; margin-bottom: 15px; color: #333; }
         .db-selector { display: flex; flex-wrap: wrap; gap: 10px; }
-        .db-option { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; cursor: pointer; }
-        .db-option:hover { background: #f0f0f0; }
+        .db-option { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border: 1px solid #e0e0e0; border-radius: 10px; cursor: pointer; transition: all 0.2s; }
+        .db-option:hover { background: #f8f9fa; border-color: #007bff; }
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        textarea { width: 100%; min-height: 400px; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-family: 'Courier New', monospace; font-size: 14px; }
-        .btn { background: #007bff; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600; width: 100%; margin-top: 10px; }
-        .btn:hover { background: #0056b3; }
-        .btn:disabled { background: #ccc; cursor: not-allowed; }
-        .btn-copy { background: #28a745; padding: 6px 12px; font-size: 14px; width: auto; margin-top: 0; }
+        textarea { width: 100%; min-height: 400px; padding: 12px; border: 1px solid #e0e0e0; border-radius: 10px; font-family: 'Courier New', monospace; font-size: 14px; transition: border-color 0.2s; }
+        textarea:focus { outline: none; border-color: #007bff; }
+        .btn { background: #007bff; color: white; border: none; padding: 12px 24px; border-radius: 10px; cursor: pointer; font-size: 16px; font-weight: 600; width: 100%; margin-top: 10px; transition: all 0.2s; }
+        .btn:hover { background: #0056b3; transform: translateY(-1px); }
+        .btn:disabled { background: #ccc; cursor: not-allowed; transform: none; }
+        .btn-copy { background: #28a745; padding: 8px 16px; font-size: 14px; width: auto; margin-top: 0; border-radius: 8px; }
         .btn-copy:hover { background: #218838; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        .error { background: #f8d7da; color: #721c24; padding: 12px; border-radius: 6px; margin-top: 10px; display: none; }
-        .mapping-section { margin-bottom: 20px; border: 1px solid #ddd; border-radius: 6px; padding: 15px; }
+        .error { background: #fff3f3; color: #dc3545; padding: 12px; border-radius: 10px; margin-top: 10px; display: none; border: 1px solid #ffcccc; }
+        .mapping-section { margin-bottom: 20px; border: 1px solid #e0e0e0; border-radius: 12px; padding: 18px; }
         .mapping-title { font-weight: 600; margin-bottom: 15px; color: #007bff; }
-        .rule-list { display: flex; flex-direction: column; gap: 10px; }
-        .rule-item { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 80px 40px; gap: 10px; align-items: center; background: #f8f9fa; padding: 10px; border-radius: 4px; }
-        .rule-item input, .rule-item select { padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; }
-        .rule-item label { font-size: 12px; color: #666; font-weight: 500; }
-        .btn-add { background: #28a745; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px; margin-top: 10px; }
-        .btn-add:hover { background: #218838; }
-        .btn-delete { background: #dc3545; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .rule-list { display: flex; flex-direction: column; gap: 12px; }
+        .rule-item { display: grid; grid-template-columns: 1.5fr 0.8fr 0.8fr 1.5fr 70px 40px; gap: 10px; align-items: start; background: #fafafa; padding: 14px; border-radius: 10px; }
+        .rule-item input, .rule-item select { padding: 8px 12px; border: 1px solid #e0e0e0; border-radius: 8px; font-size: 13px; transition: border-color 0.2s; }
+        .rule-item input:focus, .rule-item select:focus { outline: none; border-color: #007bff; }
+        .rule-item label { font-size: 12px; color: #666; font-weight: 500; display: block; margin-bottom: 4px; }
+        .rule-item > div { display: flex; flex-direction: column; }
+        .rule-item .type-wrapper { flex-direction: row; align-items: flex-end; gap: 8px; }
+        .type-config-input { width: 80px !important; font-size: 12px !important; }
+        .btn-add { background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 10px; cursor: pointer; font-size: 14px; margin-top: 10px; transition: all 0.2s; }
+        .btn-add:hover { background: #218838; transform: translateY(-1px); }
+        .btn-delete { background: #dc3545; color: white; border: none; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 12px; transition: all 0.2s; }
         .btn-delete:hover { background: #c82333; }
-        .rule-header { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 80px 40px; gap: 10px; margin-bottom: 10px; font-size: 12px; color: #666; font-weight: 600; }
-        .type-config { display: none; margin-top: 10px; padding: 10px; background: #f0f7ff; border-radius: 4px; }
-        .type-config.show { display: block; }
-        .type-config-row { display: flex; align-items: center; gap: 10px; margin-bottom: 5px; }
-        .type-config-row label { font-size: 12px; color: #666; min-width: 80px; }
-        .type-config-row input { flex: 1; padding: 6px; border: 1px solid #ddd; border-radius: 4px; }
-        .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 2px solid #007bff; }
+        .rule-header { display: grid; grid-template-columns: 1.5fr 0.8fr 0.8fr 1.5fr 70px 40px; gap: 10px; margin-bottom: 12px; font-size: 12px; color: #666; font-weight: 600; padding: 0 4px; }
+        .tabs { display: flex; gap: 6px; margin-bottom: 24px; border-bottom: 2px solid #e0e0e0; }
+        .tab { padding: 12px 24px; background: #f8f9fa; border: 1px solid #e0e0e0; border-bottom: none; border-radius: 10px 10px 0 0; cursor: pointer; font-weight: 500; color: #666; transition: all 0.2s; }
+        .tab:hover { background: #e9ecef; }
+        .tab.active { background: #007bff; color: white; border-color: #007bff; transform: translateY(-2px); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
         .tab { padding: 12px 24px; background: #f8f9fa; border: 1px solid #ddd; border-bottom: none; border-radius: 6px 6px 0 0; cursor: pointer; font-weight: 500; color: #666; transition: all 0.3s; }
         .tab:hover { background: #e9ecef; }
         .tab.active { background: #007bff; color: white; border-color: #007bff; }
@@ -825,11 +834,14 @@ FROM credit_usage_detail"></textarea>
                                     <option value="comment" ${rule.targetField === 'comment' ? 'selected' : ''}>字段注释</option>
                                 </select>
                             </div>
-                            <div>
-                                <label>目标类型</label>
-                                <select data-field="dataType" onchange="toggleTypeConfig(this, '${dbType}', ${index})">
-                                    ${typeOptions.map(opt => `<option value="${opt}" ${rule.dataType === opt ? 'selected' : ''}>${opt}</option>`).join('')}
-                                </select>
+                            <div class="type-wrapper">
+                                <div style="flex: 1; min-width: 0;">
+                                    <label>目标类型</label>
+                                    <select data-field="dataType" onchange="toggleTypeConfig(this, '${dbType}', ${index})" style="width: 100%;">
+                                        ${typeOptions.map(opt => `<option value="${opt}" ${rule.dataType === opt ? 'selected' : ''}>${opt}</option>`).join('')}
+                                    </select>
+                                </div>
+                                ${renderTypeConfigInline(dbType, rule.dataType, rule)}
                             </div>
                             <div>
                                 <label>优先级</label>
@@ -837,11 +849,6 @@ FROM credit_usage_detail"></textarea>
                             </div>
                             <div>
                                 <button class="btn-delete" onclick="deleteRule('${dbType}', ${index})">删除</button>
-                            </div>
-
-                            <!-- 类型配置区域 -->
-                            <div class="type-config ${hasTypeConfig(rule.dataType) ? 'show' : ''}" id="typeConfig_${dbType}_${index}">
-                                ${renderTypeConfigInputs(dbType, rule.dataType, rule)}
                             </div>
                         </div>
                     `;
@@ -865,66 +872,53 @@ FROM credit_usage_detail"></textarea>
                    upperType.includes('FLOAT') || upperType.includes('DOUBLE');
         }
 
-        // 渲染类型配置输入框
-        function renderTypeConfigInputs(dbType, dataType, rule) {
+        // 渲染内联类型配置（与类型选择框在同一行）
+        function renderTypeConfigInline(dbType, dataType, rule) {
             const upperType = dataType.toUpperCase();
-            let html = '';
 
             if (upperType.includes('DECIMAL') || upperType.includes('NUMERIC')) {
                 // DECIMAL 类型：精度和小数位
                 const precision = rule.precision || 24;
                 const scale = rule.scale || 6;
-                html = `
-                    <div class="type-config-row">
-                        <label>精度（总位数）</label>
-                        <input type="number" data-field="precision" value="${precision}" min="1" max="65" placeholder="24">
-                        <label style="min-width: auto;">小数位</label>
-                        <input type="number" data-field="scale" value="${scale}" min="0" max="30" placeholder="6">
+                return `
+                    <div style="display: flex; gap: 6px; align-items: flex-end;">
+                        <div style="flex: 1;">
+                            <input type="number" class="type-config-input" data-field="precision" value="${precision}" min="1" max="65" placeholder="精度">
+                        </div>
+                        <div style="flex: 1;">
+                            <input type="number" class="type-config-input" data-field="scale" value="${scale}" min="0" max="30" placeholder="小数位">
+                        </div>
                     </div>
                 `;
             } else if (upperType.includes('VARCHAR') || upperType.includes('CHAR')) {
                 // VARCHAR/CHAR 类型：长度
                 const length = rule.length || 255;
-                html = `
-                    <div class="type-config-row">
-                        <label>长度</label>
-                        <input type="number" data-field="length" value="${length}" min="1" max="65535" placeholder="255">
+                return `
+                    <div style="flex: 0 0 80px;">
+                        <input type="number" class="type-config-input" data-field="length" value="${length}" min="1" max="65535" placeholder="长度">
                     </div>
                 `;
             } else if (upperType.includes('FLOAT') || upperType.includes('DOUBLE')) {
                 // FLOAT/DOUBLE 类型：精度（可选）
                 const precision = rule.precision || '';
-                html = `
-                    <div class="type-config-row">
-                        <label>精度（可选）</label>
-                        <input type="number" data-field="precision" value="${precision}" min="1" max="255" placeholder="留空使用默认值">
+                return `
+                    <div style="flex: 0 0 80px;">
+                        <input type="number" class="type-config-input" data-field="precision" value="${precision}" min="1" max="255" placeholder="精度">
                     </div>
                 `;
             }
 
-            return html;
+            return '';
         }
 
         // 切换类型配置显示
         function toggleTypeConfig(selectElement, dbType, index) {
-            const dataType = selectElement.value;
-            const configDiv = document.getElementById(`typeConfig_${dbType}_${index}`);
-
-            if (hasTypeConfig(dataType)) {
-                configDiv.classList.add('show');
-                // 重新渲染配置输入框
-                configDiv.innerHTML = renderTypeConfigInputs(dbType, dataType, {
-                    precision: 24,
-                    scale: 6,
-                    length: 255
-                });
-            } else {
-                configDiv.classList.remove('show');
-            }
-
             // 更新规则中的dataType
             const rule = customRules[dbType][index];
-            rule.dataType = dataType;
+            rule.dataType = selectElement.value;
+
+            // 重新渲染整个规则列表以显示/隐藏类型配置
+            renderMappings();
         }
 
         function addRule(dbType) {
