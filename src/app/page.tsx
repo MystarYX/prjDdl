@@ -653,7 +653,7 @@ export default function Home() {
                         type="text"
                         value={rule.keywords.join(', ')}
                         onChange={(e) => updateRule(rule.id, {
-                          keywords: e.target.value.split(',').map(k => k.trim()).filter(k => k)
+                          keywords: e.target.value.split(/[,，]/).map(k => k.trim()).filter(k => k)
                         })}
                         placeholder="amt, amount, 金额"
                         className="w-full px-2 py-1.5 text-sm border rounded"
