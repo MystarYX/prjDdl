@@ -30,6 +30,136 @@ const DATABASE_CONFIGS: Record<DatabaseType, {
   starrocks: { prefix: 'CREATE TABLE IF NOT EXISTS', comment: 'INLINE', addPk: true },
 };
 
+// 解析 CREATE TABLE 语句，提取字段信息
+function tryParseCreateTable(sql: string): FieldInfo[] {
+  const upperSql = sql.toUpperCase();
+
+  // 检测是否是 CREATE TABLE 语句
+  if (!upperSql.startsWith('CREATE TABLE')) {
+    return [];
+  }
+
+  // 查找表名（CREATE TABLE IF NOT EXISTS 表名 或 CREATE TABLE 表名）
+  let tableStartIndex = upperSql.indexOf('CREATE TABLE');
+  tableStartIndex += 12; // 'CREATE TABLE' 的长度
+
+  // 跳过 IF NOT EXISTS
+  let startIndex = tableStartIndex;
+  if (upperSql.substring(startIndex, startIndex + 12).trim() === 'IF NOT EXISTS') {
+    startIndex += 12;
+  }
+
+  // 跳过空格，找到表名的起始位置
+  while (startIndex < sql.length && /\s/.test(sql[startIndex])) {
+    startIndex++;
+  }
+
+  // 查找第一个左括号（字段定义的开始）
+  const leftParenIndex = sql.indexOf('(', startIndex);
+  if (leftParenIndex === -1) {
+    return [];
+  }
+
+  // 匹配括号对，找到右括号的位置
+  let parenCount = 0;
+  let rightParenIndex = -1;
+
+  for (let i = leftParenIndex; i < sql.length; i++) {
+    if (sql[i] === '(') {
+      parenCount++;
+    } else if (sql[i] === ')') {
+      parenCount--;
+      if (parenCount === 0) {
+        rightParenIndex = i;
+        break;
+      }
+    }
+  }
+
+  if (rightParenIndex === -1) {
+    return [];
+  }
+
+  // 提取字段定义部分（括号内的内容）
+  const fieldsPart = sql.substring(leftParenIndex + 1, rightParenIndex);
+
+  // 按逗号分割字段（但要小心处理字段类型中的逗号，如 DECIMAL(10, 2)）
+  const fieldLines: string[] = [];
+  let current = '';
+  let typeParenCount = 0;
+  let inString = false;
+  let stringChar = '';
+
+  for (let i = 0; i < fieldsPart.length; i++) {
+    const char = fieldsPart[i];
+
+    // 处理字符串（单引号或双引号）
+    if ((char === "'" || char === '"') && (i === 0 || fieldsPart[i - 1] !== '\\')) {
+      if (!inString) {
+        inString = true;
+        stringChar = char;
+        current += char;
+      } else if (char === stringChar) {
+        inString = false;
+        current += char;
+      } else {
+        current += char;
+      }
+    } else if (inString) {
+      current += char;
+    } else if (char === '(') {
+      typeParenCount++;
+      current += char;
+    } else if (char === ')') {
+      typeParenCount--;
+      current += char;
+    } else if (char === ',' && typeParenCount === 0) {
+      // 遇到逗号且不在括号内，分割字段
+      fieldLines.push(current);
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+
+  // 添加最后一个字段
+  if (current.trim()) {
+    fieldLines.push(current);
+  }
+
+  const fields: FieldInfo[] = [];
+
+  for (const line of fieldLines) {
+    const trimmedLine = line.trim();
+    if (!trimmedLine) continue;
+
+    // 解析字段定义：字段名 类型 [COMMENT '注释']
+    // 支持单引号和双引号的注释
+    // 类型可能包含括号和逗号，如 DECIMAL(10, 2)
+    const commentMatch = trimmedLine.match(/\s+COMMENT\s+['"]([^'"]*)['"]$/i);
+    const comment = commentMatch ? commentMatch[1] : '';
+
+    // 去掉注释部分
+    const withoutComment = commentMatch ? trimmedLine.substring(0, commentMatch.index).trim() : trimmedLine;
+
+    // 分割字段名和类型
+    const firstSpaceIndex = withoutComment.indexOf(' ');
+    if (firstSpaceIndex === -1) continue;
+
+    const fieldName = withoutComment.substring(0, firstSpaceIndex).trim();
+    const fieldType = withoutComment.substring(firstSpaceIndex + 1).trim();
+
+    if (fieldName && fieldType) {
+      fields.push({
+        name: fieldName,
+        comment: comment
+      });
+    }
+  }
+
+  return fields;
+}
+
 // 移除CTE (WITH子句)
 function removeCTE(sql: string): string {
   sql = sql.trim();
@@ -131,6 +261,10 @@ function removeCTE(sql: string): string {
 function parseSQLFields(sql: string): FieldInfo[] {
   const fields: FieldInfo[] = [];
   sql = sql.trim();
+
+  // 新增：检测 CREATE TABLE 语句
+  const createTableResult = tryParseCreateTable(sql);
+  if (createTableResult.length > 0) return createTableResult;
 
   // 移除CTE子句
   sql = removeCTE(sql);
