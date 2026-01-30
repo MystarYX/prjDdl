@@ -90,6 +90,52 @@ const ALL_TYPE_OPTIONS = {
   starrocks: ['TINYINT', 'SMALLINT', 'INT', 'BIGINT', 'LARGEINT', 'FLOAT', 'DOUBLE', 'DECIMAL', 'DATE', 'DATETIME', 'CHAR', 'VARCHAR', 'STRING', 'BOOLEAN', 'JSON', 'BITMAP', 'HLL', 'PERCENTILE', 'ARRAY', 'MAP', 'STRUCT']
 };
 
+// 关键词输入组件 - 使用本地状态避免重新渲染导致光标跳动
+function KeywordInput({
+  value,
+  onChange,
+  placeholder
+}: {
+  value: string[];
+  onChange: (keywords: string[]) => void;
+  placeholder: string;
+}) {
+  const [localValue, setLocalValue] = useState(value.join(', '));
+
+  useEffect(() => {
+    setLocalValue(value.join(', '));
+  }, [value]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setLocalValue(e.target.value);
+  };
+
+  const handleBlur = () => {
+    const keywords = localValue.split(/[,，]/).map(k => k.trim()).filter(k => k);
+    onChange(keywords);
+    setLocalValue(keywords.join(', '));
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleBlur();
+      e.currentTarget.blur();
+    }
+  };
+
+  return (
+    <input
+      type="text"
+      value={localValue}
+      onChange={handleChange}
+      onBlur={handleBlur}
+      onKeyDown={handleKeyDown}
+      placeholder={placeholder}
+      className="w-full px-2 py-1.5 text-sm border rounded"
+    />
+  );
+}
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState('generator');
   const [sqlInput, setSqlInput] = useState('');
@@ -649,14 +695,10 @@ export default function Home() {
                     {/* 关键词 */}
                     <div>
                       <label className="text-xs text-gray-500 block mb-1">关键词</label>
-                      <input
-                        type="text"
-                        value={rule.keywords.join(', ')}
-                        onChange={(e) => updateRule(rule.id, {
-                          keywords: e.target.value.split(/[,，]/).map(k => k.trim()).filter(k => k)
-                        })}
+                      <KeywordInput
+                        value={rule.keywords}
+                        onChange={(keywords) => updateRule(rule.id, { keywords })}
                         placeholder="amt, amount, 金额"
-                        className="w-full px-2 py-1.5 text-sm border rounded"
                       />
                     </div>
 
