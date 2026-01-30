@@ -324,19 +324,21 @@ function splitFields(selectClause: string): string[] {
       // 检查前后是否为单词边界
       const prevChar = i === 0 ? ' ' : selectClause[i - 1];
       const nextChar = i + 4 >= selectClause.length ? ' ' : selectClause[i + 4];
-      
-      if (/\s/.test(prevChar) && /\s/.test(nextChar)) {
+
+      // 前面必须是空格，后面必须是空格或标点符号（确保单词边界）
+      if (/\s/.test(prevChar) && (/\s/.test(nextChar) || /[(),;]$/.test(nextChar))) {
         caseCount++;
       }
       current += char;
-    } 
+    }
     // 检查是否是 END 关键字
     else if (caseCount > 0 && char.toUpperCase() === 'E' &&
              selectClause.substring(i, i + 3).toUpperCase() === 'END') {
       const prevChar = i === 0 ? ' ' : selectClause[i - 1];
       const nextChar = i + 3 >= selectClause.length ? ' ' : selectClause[i + 3];
-      
-      if (/\s/.test(prevChar) && /\s/.test(nextChar)) {
+
+      // 前面必须是空格，后面必须是空格或标点符号（确保单词边界）
+      if (/\s/.test(prevChar) && (/\s/.test(nextChar) || /[(),;]$/.test(nextChar))) {
         caseCount--;
       }
       current += char;
@@ -393,8 +395,8 @@ function parseFieldExpression(expr: string, commentMap?: Record<string, string>)
   // 规范化表达式用于注释查找
   const normalizeExpr = (e: string) => e.replace(/\s+/g, ' ').trim();
 
-  // 处理显式AS别名
-  const aliasMatch = expr.match(/\s+AS\s+([^\s,]+)$/i);
+  // 处理显式AS别名（确保AS是独立的单词）
+  const aliasMatch = expr.match(/(?:^|\s)AS\s+([^\s,]+)$/i);
   if (aliasMatch) {
     const mainExpr = expr.substring(0, aliasMatch.index).trim();
     const alias = aliasMatch[1].trim().replace(/['"`]/g, '');
@@ -806,6 +808,11 @@ function generateDDL(fields: FieldInfo[], customRules: Record<string, InferenceR
       comment: field.comment
     };
   });
+
+  // 检查是否有有效字段
+  if (adjustedFields.length === 0) {
+    throw new Error('没有有效的字段用于生成DDL');
+  }
 
   // 根据数据库类型调用对应的生成函数
   switch (databaseType) {
