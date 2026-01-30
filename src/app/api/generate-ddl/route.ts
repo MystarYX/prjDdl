@@ -36,54 +36,100 @@ const DATABASE_CONFIGS: Record<DatabaseType, {
 
 // 移除CTE (WITH子句)
 function removeCTE(sql: string): string {
-  const upperSQL = sql.toUpperCase().trim();
+  sql = sql.trim();
 
   // 检查是否以WITH开头
-  if (!upperSQL.startsWith('WITH ')) {
+  if (!sql.toUpperCase().startsWith('WITH ')) {
     return sql;
   }
 
-  // 找到WITH后的第一个AS关键字
-  const asIndex = upperSQL.indexOf(' AS ');
-  if (asIndex === -1) {
-    return sql;
-  }
+  let pos = 4; // 'WITH'的长度
+  let endPos = 0;
 
-  // 从AS后的左括号开始，匹配对应的右括号
-  let parenCount = 0;
-  let startParen = -1;
-  let endParen = -1;
+  while (pos < sql.length) {
+    // 跳过空格
+    while (pos < sql.length && /\s/.test(sql[pos])) {
+      pos++;
+    }
 
-  for (let i = asIndex + 4; i < sql.length; i++) {
-    const char = sql[i];
-    if (char === '(') {
-      if (parenCount === 0) {
-        startParen = i;
+    // 读取CTE名称
+    let cteNameStart = pos;
+    while (pos < sql.length && /\w/.test(sql[pos])) {
+      pos++;
+    }
+    const cteName = sql.substring(cteNameStart, pos).trim();
+
+    if (!cteName) {
+      break; // 没有CTE名称了，结束
+    }
+
+    // 跳过空格
+    while (pos < sql.length && /\s/.test(sql[pos])) {
+      pos++;
+    }
+
+    // 检查是否有AS关键字
+    if (pos + 2 >= sql.length ||
+        sql.substring(pos, pos + 2).toUpperCase() !== 'AS') {
+      break; // 不是AS了，应该是主SELECT
+    }
+
+    pos += 2; // 跳过AS
+
+    // 跳过空格
+    while (pos < sql.length && /\s/.test(sql[pos])) {
+      pos++;
+    }
+
+    // 检查是否有左括号
+    if (pos >= sql.length || sql[pos] !== '(') {
+      break; // 不是CTE定义
+    }
+
+    // 匹配括号对
+    let parenCount = 0;
+    let foundEnd = false;
+
+    for (let i = pos; i < sql.length; i++) {
+      if (sql[i] === '(') {
+        parenCount++;
+      } else if (sql[i] === ')') {
+        parenCount--;
+        if (parenCount === 0) {
+          endPos = i + 1;
+          foundEnd = true;
+          break;
+        }
       }
-      parenCount++;
-    } else if (char === ')') {
-      parenCount--;
-      if (parenCount === 0) {
-        endParen = i;
-        break;
-      }
+    }
+
+    if (!foundEnd) {
+      break; // 没有找到匹配的右括号
+    }
+
+    // 更新pos到右括号后
+    pos = endPos;
+
+    // 跳过空格
+    while (pos < sql.length && /\s/.test(sql[pos])) {
+      pos++;
+    }
+
+    // 检查是否有逗号（还有更多CTE）
+    if (pos < sql.length && sql[pos] === ',') {
+      pos++; // 跳过逗号
+      continue; // 继续处理下一个CTE
+    } else {
+      break; // 没有逗号了，所有CTE处理完成
     }
   }
 
-  if (startParen === -1 || endParen === -1) {
-    return sql;
+  // 返回剩余的SQL（主SELECT）
+  if (endPos > 0) {
+    return sql.substring(endPos).trim();
   }
 
-  // 移除WITH子句，返回剩余的SQL
-  const remainingSQL = sql.substring(endParen + 1).trim();
-
-  // 如果还有其他CTE（逗号分隔的多个CTE），递归处理
-  if (remainingSQL.toUpperCase().startsWith(',')) {
-    // 逗号后面是另一个CTE定义
-    return removeCTE(remainingSQL.substring(1).trim());
-  }
-
-  return remainingSQL;
+  return sql;
 }
 
 function parseSQLFields(sql: string): FieldInfo[] {
