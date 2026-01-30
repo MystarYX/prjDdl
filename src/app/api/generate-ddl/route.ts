@@ -26,7 +26,7 @@ const DATABASE_CONFIGS: Record<DatabaseType, {
   addEngine?: boolean;
 }> = {
   spark: { prefix: 'CREATE TABLE IF NOT EXISTS', comment: 'INLINE' },
-  mysql: { prefix: 'CREATE TABLE IF NOT EXISTS', comment: 'INLINE', addPk: true, addEngine: true },
+  mysql: { prefix: 'CREATE TABLE ', comment: 'INLINE', addPk: true, addEngine: true },
   postgresql: { prefix: 'CREATE TABLE', comment: 'SEPARATE' },
   starrocks: { prefix: 'CREATE TABLE IF NOT EXISTS', comment: 'INLINE' },
   clickhouse: { prefix: 'CREATE TABLE IF NOT EXISTS', comment: 'INLINE' },
