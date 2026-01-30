@@ -242,12 +242,15 @@ function extractCommentMap(lines: string[]): Record<string, string> {
   const commentMap: Record<string, string> = {};
 
   for (const line of lines) {
-    const match = line.match(/--\s*(.+?)(,)?$/);
+    // 匹配注释：-- 注释内容（可能以逗号结尾）
+    const match = line.match(/--\s*(.+?)(?:,)?$/);
     if (match) {
-      const comment = match[1].trim();
+      // 去掉注释中的引号，避免在生成DDL时出现引号问题
+      const comment = match[1].trim().replace(/[`'""]/g, '');
       const fieldPart = line.substring(0, match.index).trim();
       if (fieldPart) {
-        let normalizedKey = fieldPart.replace(/^,/, '').trim();
+        // 去掉字段表达式末尾的逗号
+        let normalizedKey = fieldPart.replace(/^,/, '').replace(/,$/, '').trim();
 
         // 提取AS别名
         let alias = null;
@@ -270,7 +273,7 @@ function extractCommentMap(lines: string[]): Record<string, string> {
         }
 
         normalizedKey = normalizedKey.replace(/\s+/g, ' ').trim();
-        
+
         // 存储注释到多个key：表达式和别名
         commentMap[normalizedKey] = comment;
         if (alias) {
