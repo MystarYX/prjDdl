@@ -133,6 +133,23 @@ function tryParseCreateTable(sql: string): FieldInfo[] {
     const trimmedLine = line.trim();
     if (!trimmedLine) continue;
 
+    // 跳过约束定义（PRIMARY KEY, UNIQUE KEY, FOREIGN KEY, INDEX, KEY, CONSTRAINT）
+    const upperLine = trimmedLine.toUpperCase();
+    if (upperLine.startsWith('PRIMARY KEY') ||
+        upperLine.startsWith('UNIQUE KEY') ||
+        upperLine.startsWith('UNIQUE') ||
+        upperLine.startsWith('FOREIGN KEY') ||
+        upperLine.startsWith('INDEX') ||
+        upperLine.startsWith('KEY ') ||
+        upperLine.startsWith('CONSTRAINT')) {
+      continue;
+    }
+
+    // 跳过以括号开头的内容（如索引定义）
+    if (trimmedLine.startsWith('(')) {
+      continue;
+    }
+
     // 解析字段定义：字段名 类型 [COMMENT '注释']
     // 支持单引号和双引号的注释
     // 类型可能包含括号和逗号，如 DECIMAL(10, 2)
