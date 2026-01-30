@@ -34,9 +34,64 @@ const DATABASE_CONFIGS: Record<DatabaseType, {
   doris: { prefix: 'CREATE TABLE IF NOT EXISTS', comment: 'INLINE' },
 };
 
+// 移除CTE (WITH子句)
+function removeCTE(sql: string): string {
+  const upperSQL = sql.toUpperCase().trim();
+
+  // 检查是否以WITH开头
+  if (!upperSQL.startsWith('WITH ')) {
+    return sql;
+  }
+
+  // 找到WITH后的第一个AS关键字
+  const asIndex = upperSQL.indexOf(' AS ');
+  if (asIndex === -1) {
+    return sql;
+  }
+
+  // 从AS后的左括号开始，匹配对应的右括号
+  let parenCount = 0;
+  let startParen = -1;
+  let endParen = -1;
+
+  for (let i = asIndex + 4; i < sql.length; i++) {
+    const char = sql[i];
+    if (char === '(') {
+      if (parenCount === 0) {
+        startParen = i;
+      }
+      parenCount++;
+    } else if (char === ')') {
+      parenCount--;
+      if (parenCount === 0) {
+        endParen = i;
+        break;
+      }
+    }
+  }
+
+  if (startParen === -1 || endParen === -1) {
+    return sql;
+  }
+
+  // 移除WITH子句，返回剩余的SQL
+  const remainingSQL = sql.substring(endParen + 1).trim();
+
+  // 如果还有其他CTE（逗号分隔的多个CTE），递归处理
+  if (remainingSQL.toUpperCase().startsWith(',')) {
+    // 逗号后面是另一个CTE定义
+    return removeCTE(remainingSQL.substring(1).trim());
+  }
+
+  return remainingSQL;
+}
+
 function parseSQLFields(sql: string): FieldInfo[] {
   const fields: FieldInfo[] = [];
   sql = sql.trim();
+
+  // 移除CTE子句
+  sql = removeCTE(sql);
 
   // 策略1: 解析SELECT ... FROM（要求FROM后面有表名）
   if (sql.toUpperCase().includes('SELECT')) {
@@ -148,9 +203,12 @@ function extractCommentMap(lines: string[]): Record<string, string> {
       if (fieldPart) {
         let normalizedKey = fieldPart.replace(/^,/, '').trim();
 
-        const asMatch = normalizedKey.match(/^(.+?)\s+AS\s+[^\s,]+$/i);
+        // 提取AS别名
+        let alias = null;
+        const asMatch = normalizedKey.match(/^(.+?)\s+AS\s+([^\s,]+)$/i);
         if (asMatch) {
           normalizedKey = asMatch[1].trim();
+          alias = asMatch[2].trim().replace(/['"`]/g, '');
         } else {
           const parts = normalizedKey.split(/\s+/);
           if (parts.length > 1) {
@@ -160,12 +218,18 @@ function extractCommentMap(lines: string[]): Record<string, string> {
             );
             if (!containsOperator && !lastPart.includes('(') && !lastPart.includes(')')) {
               normalizedKey = parts.slice(0, -1).join(' ');
+              alias = lastPart.trim().replace(/['"`]/g, '');
             }
           }
         }
 
         normalizedKey = normalizedKey.replace(/\s+/g, ' ').trim();
+        
+        // 存储注释到多个key：表达式和别名
         commentMap[normalizedKey] = comment;
+        if (alias) {
+          commentMap[alias] = comment;
+        }
       }
     }
   }
@@ -254,13 +318,23 @@ function splitFields(selectClause: string): string[] {
   return fieldExpressions;
 }
 
+// 清理表别名（如 t1.order_id → order_id）
+function removeTableAlias(expr: string): string {
+  // 匹配表别名前缀（如 t1. 或 alias.）
+  // 支持多种格式：t1.field, `t1`.`field`, "t1"."field"
+  return expr.replace(/^\s*[\w`"]+\.\s*[\w`"]+\s*/g, match => {
+    // 去除表别名和点，只保留字段名
+    return match.replace(/^[\w`"]+\./, '').trim();
+  });
+}
+
 function parseFieldExpression(expr: string, commentMap?: Record<string, string>): FieldInfo | null {
   expr = expr.trim();
 
   if (!commentMap) commentMap = {};
 
   // 过滤掉包含子查询的字段
-  if (expr.toUpperCase().includes('SELECT') || 
+  if (expr.toUpperCase().includes('SELECT') ||
       (expr.toUpperCase().includes('FROM') && expr.toUpperCase().includes('('))) {
     return null;
   }
@@ -275,9 +349,11 @@ function parseFieldExpression(expr: string, commentMap?: Record<string, string>)
   if (aliasMatch) {
     const mainExpr = expr.substring(0, aliasMatch.index).trim();
     const alias = aliasMatch[1].trim().replace(/['"`]/g, '');
+
     // 使用规范化后的表达式查找注释
-    let comment = commentMap[normalizeExpr(mainExpr)] || '';
-    
+    const normalizedMainExpr = normalizeExpr(mainExpr);
+    let comment = commentMap[normalizedMainExpr] || commentMap[alias] || '';
+
     // 如果找不到注释，且表达式包含CASE关键字，尝试用最后一部分的简化表达式查找
     if (!comment && mainExpr.toUpperCase().includes('CASE')) {
       // 注释可能在最后一行，只提取了最后一部分（如 "end"）
@@ -287,30 +363,43 @@ function parseFieldExpression(expr: string, commentMap?: Record<string, string>)
         comment = commentMap[lastWordMatch[1]] || '';
       }
     }
-    
-    return { name: mainExpr, alias, comment };
+
+    // 清理表别名
+    const cleanedMainExpr = removeTableAlias(mainExpr);
+
+    return { name: cleanedMainExpr, alias, comment };
   }
 
   // 处理隐式别名（无AS关键字的最后一部分）
   const parts = expr.split(/\s+/);
   if (parts.length > 1) {
     const lastPart = parts[parts.length - 1].trim().replace(/['"`]/g, '');
-    const containsOperator = ['(', '+', '-', '*', '/', '='].some(op => 
+    const containsOperator = ['(', '+', '-', '*', '/', '='].some(op =>
       parts.slice(0, -1).join(' ').includes(op)
     );
     // 只有当不包含运算符，且最后一部分不是函数或复杂表达式时，才认为是别名
     if (!containsOperator && !lastPart.includes('(') && !lastPart.includes(')')) {
       const name = parts.slice(0, -1).join(' ');
-      // 使用规范化后的表达式查找注释
-      const comment = commentMap[normalizeExpr(name)] || '';
-      return { name, alias: lastPart, comment };
+      const normalizedMainExpr = normalizeExpr(name);
+
+      // 使用规范化后的表达式和别名查找注释
+      const comment = commentMap[normalizedMainExpr] || commentMap[lastPart] || '';
+
+      // 清理表别名
+      const cleanedName = removeTableAlias(name);
+
+      return { name: cleanedName, alias: lastPart, comment };
     }
   }
 
   const name = expr;
-  // 使用规范化后的表达式查找注释
-  const comment = commentMap[normalizeExpr(name)] || '';
-  return { name, alias: undefined, comment };
+  const normalizedMainExpr = normalizeExpr(name);
+  const comment = commentMap[normalizedMainExpr] || '';
+
+  // 清理表别名
+  const cleanedName = removeTableAlias(name);
+
+  return { name: cleanedName, alias: undefined, comment };
 }
 
 interface TypeInfo {
