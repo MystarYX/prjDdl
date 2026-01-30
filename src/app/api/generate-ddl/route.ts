@@ -660,6 +660,9 @@ function generateDDL(fields: FieldInfo[], customRules: Record<string, InferenceR
     ddlParts.push("PARTITIONED BY (pt STRING COMMENT '日分区')");
     ddlParts.push("STORED AS ORC");
     ddlParts.push("LIFECYCLE 10;");
+  } else if (databaseType === 'mysql') {
+    // MySQL 特定配置：ENGINE、ROW_FORMAT、COMMENT
+    ddlParts.push('ENGINE=InnoDB ROW_FORMAT=DYNAMIC COMMENT=\'\'');
   } else {
     if (config.comment === 'INLINE') {
       ddlParts.push("COMMENT '';");
@@ -670,10 +673,6 @@ function generateDDL(fields: FieldInfo[], customRules: Record<string, InferenceR
         ddlParts.push(`COMMENT ON COLUMN 表名.${field.name} IS '${field.comment.replace(/'/g, "''")}';`);
       });
     }
-  }
-
-  if (config.addEngine) {
-    ddlParts.push('ENGINE=InnoDB');
   }
 
   return ddlParts.join('\n');
