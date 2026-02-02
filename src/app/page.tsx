@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import ExcelTab from '@/components/ExcelTab';
 
 interface GlobalRule {
   id: string;
@@ -137,7 +138,7 @@ function KeywordInput({
 }
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState('generator');
+  const [activeTab, setActiveTab] = useState('excel');
   const [sqlInput, setSqlInput] = useState('');
   const [ddlOutput, setDdlOutput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -552,6 +553,16 @@ export default function Home() {
         {/* 标签页导航 */}
         <div className="flex gap-2 mb-6 border-b-2 border-gray-300">
           <button
+            onClick={() => setActiveTab('excel')}
+            className={`px-6 py-3 font-medium rounded-t-lg transition-all ${
+              activeTab === 'excel'
+                ? 'bg-blue-600 text-white border-t border-l border-r border-blue-600'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            Excel上传
+          </button>
+          <button
             onClick={() => setActiveTab('generator')}
             className={`px-6 py-3 font-medium rounded-t-lg transition-all ${
               activeTab === 'generator'
@@ -572,6 +583,11 @@ export default function Home() {
             规则管理器
           </button>
         </div>
+
+        {/* Excel上传标签页 */}
+        {activeTab === 'excel' && (
+          <ExcelTab />
+        )}
 
         {/* DDL生成器标签页 */}
         {activeTab === 'generator' && (
