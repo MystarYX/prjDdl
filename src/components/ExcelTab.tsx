@@ -145,7 +145,7 @@ export default function ExcelTab() {
             return regex.test(matchField);
           });
         } catch (e) {
-          console.error('Invalid regex:', keyword);
+          console.error('Invalid regex pattern in keywords:', keywords);
         }
       }
 
