@@ -492,9 +492,12 @@ export default function ExcelTab() {
       return;
     }
 
-    // 如果传入了额外的码转名字段，使用它来更新 codeToNameFieldsMap
+    // 如果传入了额外的码转名字段，使用它来更新 codeToNameFieldsMap 和 ref
     if (extraCodeToNameFields && extraCodeToNameFields.size > 0) {
-      setCodeToNameFieldsMap(extraCodeToNameFields);
+      // 同步更新 ref
+      codeToNameFieldsRef.current = new Map(extraCodeToNameFields);
+      // 更新 state
+      setCodeToNameFieldsMap(new Map(extraCodeToNameFields));
     }
 
     const finalTableName = generateDWDTableName(dwdTableName);
@@ -577,11 +580,14 @@ export default function ExcelTab() {
 
     // 将码转名字段插入到对应的位置
     const finalFields: { name: string; type: string; comment: string }[] = [];
+    // 使用传入的 extraCodeToNameFields 或者 state 中的 codeToNameFieldsMap
+    const codeToNameFieldsToUse = extraCodeToNameFields || codeToNameFieldsMap;
+    
     fields.forEach((field, index) => {
       finalFields.push(field);
       
       // 检查这个字段后面是否有新增的码转名字段
-      const newFields = codeToNameFieldsMap.get(index);
+      const newFields = codeToNameFieldsToUse.get(index);
       if (newFields && newFields.length > 0) {
         newFields.forEach(newField => {
           finalFields.push({
@@ -686,8 +692,9 @@ LIFECYCLE 10;`;
       return;
     }
 
-    // 清除之前的码转名字段映射
+    // 清除之前的码转名字段映射（state 和 ref 都需要清空）
     setCodeToNameFieldsMap(new Map());
+    codeToNameFieldsRef.current = new Map();
 
     // 从localStorage加载码转名维表配置
     let codeToNameConfigs: any[] = [];
