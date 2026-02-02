@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import ExcelTab from '@/components/ExcelTab';
+import CodeToNameConfig from '@/components/CodeToNameConfig';
 
 interface GlobalRule {
   id: string;
@@ -138,7 +139,7 @@ function KeywordInput({
 }
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState('excel');
+  const [activeTab, setActiveTab] = useState('excel');  // 'excel' | 'generator' | 'rules' | 'codeToName'
   const [sqlInput, setSqlInput] = useState('');
   const [ddlOutput, setDdlOutput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -582,6 +583,16 @@ export default function Home() {
           >
             规则管理器
           </button>
+          <button
+            onClick={() => setActiveTab('codeToName')}
+            className={`px-6 py-3 font-medium rounded-t-lg transition-all ${
+              activeTab === 'codeToName'
+                ? 'bg-blue-600 text-white border-t border-l border-r border-blue-600'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            码转名配置
+          </button>
         </div>
 
         {/* Excel上传标签页 */}
@@ -833,6 +844,17 @@ export default function Home() {
               + 添加新规则
             </button>
           </div>
+        </div>
+
+        {/* 码转名配置标签页 */}
+        <div style={{ display: activeTab === 'codeToName' ? 'block' : 'none' }}>
+          <CodeToNameConfig onDataChange={() => {
+            // 触发 storage 事件，通知 ExcelTab 重新生成 INSERT 和 DWD
+            window.dispatchEvent(new StorageEvent('storage', {
+              key: 'codeToNameConfig',
+              newValue: localStorage.getItem('codeToNameConfig') || ''
+            }));
+          }} />
         </div>
       </div>
     </div>

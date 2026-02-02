@@ -906,18 +906,6 @@ etlField + '\n' +
           </p>
         </div>
 
-        {/* 导航区域 */}
-        <div className="mb-6 flex justify-center">
-          <Button
-            variant="outline"
-            onClick={() => window.location.href = '/code-to-name'}
-            className="gap-2"
-          >
-            <Database className="w-4 h-4" />
-            码转名维表配置
-          </Button>
-        </div>
-
         {/* 上传区域 */}
         {!data && (
           <Card className="max-w-2xl mx-auto shadow-lg">
