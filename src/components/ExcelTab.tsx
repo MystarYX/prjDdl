@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Upload, FileSpreadsheet, AlertCircle, Download, Trash2, Copy, CheckCircle2, Code2, Database } from 'lucide-react';
+import { Upload, FileSpreadsheet, AlertCircle, Download, Trash2, Copy, CheckCircle2, Code2, Database, RefreshCw } from 'lucide-react';
 
 interface ExcelData {
   headers: string[];
@@ -1197,6 +1197,25 @@ etlField + '\n' +
                     )}
                   </div>
 
+                  <div className="space-y-2">
+                    <Button
+                      onClick={() => {
+                        // 点击生成按钮时，使用最新的码转名字段信息重新生成 DWD
+                        generateDWDSQL(codeToNameFieldsRef.current);
+                      }}
+                      variant="default"
+                      className="w-full bg-blue-600 hover:bg-blue-700 gap-2"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      生成 DWD（与 INSERT 字段保持一致）
+                    </Button>
+                    {codeToNameFieldsRef.current.size > 0 && (
+                      <p className="text-xs text-orange-600 dark:text-orange-400 text-center">
+                        检测到 {Array.from(codeToNameFieldsRef.current.values()).flat().length} 个码转名字段，请点击按钮更新 DWD 表结构
+                      </p>
+                    )}
+                  </div>
+
                   {dwdSQL && (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
@@ -1272,6 +1291,15 @@ etlField + '\n' +
                         readOnly
                         className="font-mono text-sm bg-slate-900 text-purple-400 h-[300px] resize-x"
                       />
+                      {codeToNameFieldsRef.current.size > 0 && (
+                        <div className="flex items-center gap-2 p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
+                          <AlertCircle className="w-4 h-4 text-orange-600 dark:text-orange-400 flex-shrink-0" />
+                          <p className="text-sm text-orange-700 dark:text-orange-300">
+                            INSERT 语句包含 <span className="font-bold">{Array.from(codeToNameFieldsRef.current.values()).flat().length}</span> 个码转名字段，
+                            请点击上方 <span className="font-bold">"生成 DWD"</span> 按钮确保 DWD 表结构字段一致
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
                   {!insertSQL && (
