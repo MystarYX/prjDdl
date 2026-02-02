@@ -796,13 +796,6 @@ LIFECYCLE 10;`;
       const matchedConfigs = codeToNameConfigs.filter(
         (config: any) => config.mainTableField === rawFieldName
       );
-      // 提取原始字段名（去掉m.前缀）
-      let rawFieldName = field.source.replace(/^m\./, '');
-      
-      // 在码转名维表配置中查找匹配
-      const matchedConfigs = codeToNameConfigs.filter(
-        (config: any) => config.mainTableField === rawFieldName
-      );
 
       matchedConfigs.forEach(config => {
         // 如果没有配置表别名，自动生成
