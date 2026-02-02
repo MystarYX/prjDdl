@@ -17,6 +17,17 @@ interface ExcelData {
   sheetName: string;
 }
 
+interface GlobalRule {
+  id: string;
+  keywords: string[];
+  matchType: 'contains' | 'equals' | 'regex';
+  targetField: 'name' | 'comment';
+  targetDatabases: string[];
+  dataTypes: Record<string, string>;
+  typeParams: Record<string, { precision?: number; scale?: number; length?: number; }>;
+  priority: number;
+}
+
 export default function ExcelTab() {
   const [data, setData] = useState<ExcelData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -36,6 +47,89 @@ export default function ExcelTab() {
   
   // 记录每个字段后面新增的码转名字段（用于DWD建表SQL生成）
   const [codeToNameFieldsMap, setCodeToNameFieldsMap] = useState<Map<number, { name: string; desc: string }[]>>(new Map());
+  
+  // 规则管理器的规则
+  const [globalRules, setGlobalRules] = useState<GlobalRule[]>([]);
+
+  // 页面加载时从 localStorage 恢复规则
+  useEffect(() => {
+    const saved = localStorage.getItem('ddl_generator_global_rules');
+    if (saved) {
+      try {
+        setGlobalRules(JSON.parse(saved));
+      } catch (e) {
+        console.error('Failed to load rules:', e);
+      }
+    }
+  }, []);
+
+  // 根据字段名和注释推断字段类型（使用规则管理器的规则）
+  const inferFieldType = (fieldName: string, fieldComment: string): string => {
+    // 优先使用规则管理器的规则
+    for (const rule of globalRules) {
+      const matchField = rule.targetField === 'name' ? fieldName.toLowerCase() : fieldComment.toLowerCase();
+      const keywords = rule.keywords.map(k => k.toLowerCase());
+
+      let matches = false;
+      if (rule.matchType === 'contains') {
+        matches = keywords.some(keyword => matchField.includes(keyword));
+      } else if (rule.matchType === 'equals') {
+        matches = keywords.some(keyword => matchField === keyword);
+      } else if (rule.matchType === 'regex') {
+        try {
+          matches = keywords.some(keyword => {
+            const regex = new RegExp(keyword);
+            return regex.test(matchField);
+          });
+        } catch (e) {
+          console.error('Invalid regex:', keyword);
+        }
+      }
+
+      if (matches) {
+        const sparkType = rule.dataTypes['spark'] || rule.dataTypes['mysql'] || rule.dataTypes['starrocks'];
+        if (sparkType) {
+          const params = rule.typeParams['spark'] || rule.typeParams['mysql'] || rule.typeParams['starrocks'] || {};
+          let fullType = sparkType.toUpperCase();
+          
+          // 添加参数
+          const upper = fullType;
+          if (params.precision !== undefined && params.scale !== undefined &&
+              (upper.includes('DECIMAL') || upper.includes('NUMERIC'))) {
+            fullType = `${fullType}(${params.precision}, ${params.scale})`;
+          } else if (params.length !== undefined &&
+                     (upper.includes('VARCHAR') || upper.includes('CHAR'))) {
+            fullType = `${fullType}(${params.length})`;
+          } else if (params.precision !== undefined &&
+                     (upper.includes('FLOAT') || upper.includes('DOUBLE'))) {
+            fullType = `${fullType}(${params.precision})`;
+          }
+          
+          return fullType;
+        }
+      }
+    }
+
+    // 如果没有匹配到规则，根据字段名后缀推断类型
+    const lowerName = fieldName.toLowerCase();
+    if (lowerName.endsWith('_time') || lowerName.endsWith('time') || lowerName.includes('timestamp')) {
+      return 'TIMESTAMP';
+    } else if (lowerName.endsWith('_date') || lowerName.includes('date')) {
+      return 'DATE';
+    } else if (lowerName.endsWith('_amt') || lowerName.includes('amount') || lowerName.includes('price') ||
+               lowerName.includes('金额') || lowerName.includes('价格')) {
+      return 'DECIMAL(24, 6)';
+    } else if (lowerName.endsWith('_cnt') || lowerName.includes('count') || lowerName.includes('num')) {
+      return 'BIGINT';
+    } else if (lowerName.startsWith('is_') || lowerName.endsWith('_flag') || lowerName.endsWith('_flg')) {
+      return 'STRING';
+    } else if (lowerName.includes('id') || lowerName.includes('code')) {
+      return 'STRING';
+    }
+
+    // 默认使用 STRING
+    return 'STRING';
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -382,21 +476,24 @@ export default function ExcelTab() {
       .map(row => {
         const fieldName = row[fieldNameIndex];
         const fieldDesc = fieldDescIndex !== -1 ? row[fieldDescIndex] : null;
-        const fieldType = fieldTypeIndex !== -1 ? row[fieldTypeIndex] : null;
         
         if (fieldName && String(fieldName).trim() !== '') {
           const fieldNameStr = String(fieldName).trim();
+          const fieldCommentStr = fieldDesc ? String(fieldDesc).trim() : fieldNameStr;
           
           // 检测字段重复
           const isDuplicate = (fieldNameCount[fieldNameStr] || 0) > 1;
-          let fieldComment = fieldDesc ? String(fieldDesc).trim() : fieldNameStr;
+          let fieldComment = fieldCommentStr;
           if (isDuplicate) {
             fieldComment += '（此字段重复）';
           }
 
+          // 使用规则管理器推断字段类型
+          const fieldType = inferFieldType(fieldNameStr, fieldCommentStr);
+
           return {
             name: fieldNameStr,
-            type: fieldType ? String(fieldType).trim().toUpperCase() : 'STRING',
+            type: fieldType,
             comment: fieldComment
           };
         }
