@@ -48,6 +48,9 @@ export default function ExcelTab() {
   // 记录每个字段后面新增的码转名字段（用于DWD建表SQL生成）
   const [codeToNameFieldsMap, setCodeToNameFieldsMap] = useState<Map<number, { name: string; desc: string }[]>>(new Map());
   
+  // 用于存储最近一次生成的码转名字段信息（用于 DWD 生成）
+  const codeToNameFieldsRef = useRef<Map<number, { name: string; desc: string }[]>>(new Map());
+  
   // 规则管理器的规则
   const [globalRules, setGlobalRules] = useState<GlobalRule[]>([]);
   
@@ -483,10 +486,15 @@ export default function ExcelTab() {
   };
 
   // 生成DWD建表SQL
-  const generateDWDSQL = () => {
+  const generateDWDSQL = (extraCodeToNameFields?: Map<number, { name: string; desc: string }[]>) => {
     if (!data || !dwdTableName) {
       setDwdSQL('');
       return;
+    }
+
+    // 如果传入了额外的码转名字段，使用它来更新 codeToNameFieldsMap
+    if (extraCodeToNameFields && extraCodeToNameFields.size > 0) {
+      setCodeToNameFieldsMap(extraCodeToNameFields);
     }
 
     const finalTableName = generateDWDTableName(dwdTableName);
@@ -821,6 +829,11 @@ LIFECYCLE 10;`;
           
           // 如果有新增字段，记录到map中
           if (newFields.length > 0) {
+            // 同步更新 ref（用于立即调用 generateDWDSQL）
+            const existingRefFields = codeToNameFieldsRef.current.get(fieldIndex) || [];
+            codeToNameFieldsRef.current.set(fieldIndex, [...existingRefFields, ...newFields]);
+            
+            // 更新 state（用于渲染和其他依赖）
             setCodeToNameFieldsMap(prev => {
               const newMap = new Map(prev);
               const existingFields = newMap.get(fieldIndex) || [];
@@ -868,11 +881,12 @@ etlField + '\n' +
 
     setInsertSQL(sql);
     
-    // INSERT 语句生成后，如果有码转名字段，自动重新生成 DWD 表结构
+    // INSERT 语句生成后，如果有码转名字段，立即重新生成 DWD 表结构
     if (codeToNameFields.length > 0) {
-      // 稍微延迟以确保 codeToNameFieldsMap 已更新
+      // 立即调用 generateDWDSQL，传入当前最新的码转名字段映射
+      // 使用 setTimeout 确保 codeToNameFieldsMap 的 setState 已执行
       setTimeout(() => {
-        generateDWDSQL();
+        generateDWDSQL(codeToNameFieldsRef.current);
       }, 50);
     }
   };
