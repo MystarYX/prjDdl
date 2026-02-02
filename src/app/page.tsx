@@ -585,13 +585,12 @@ export default function Home() {
         </div>
 
         {/* Excel上传标签页 */}
-        {activeTab === 'excel' && (
+        <div style={{ display: activeTab === 'excel' ? 'block' : 'none' }}>
           <ExcelTab />
-        )}
+        </div>
 
         {/* DDL生成器标签页 */}
-        {activeTab === 'generator' && (
-          <>
+        <div style={{ display: activeTab === 'generator' ? 'block' : 'none' }}>
             {/* 数据库类型选择 */}
             <div className="bg-white rounded-xl p-6 mb-6 shadow-sm">
               <h3 className="font-semibold text-gray-800 mb-4">目标数据库类型</h3>
@@ -665,11 +664,10 @@ export default function Home() {
                 />
               </div>
             </div>
-          </>
-        )}
+        </div>
 
         {/* 规则管理器标签页 */}
-        {activeTab === 'rules' && (
+        <div style={{ display: activeTab === 'rules' ? 'block' : 'none' }}>
           <div className="bg-white rounded-xl p-6 shadow-sm">
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-semibold text-gray-800">字段类型推断规则配置</h3>
@@ -835,7 +833,7 @@ export default function Home() {
               + 添加新规则
             </button>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
