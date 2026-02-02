@@ -159,7 +159,7 @@ export default function ExcelTab() {
           const upper = fullType;
           if (params.precision !== undefined && params.scale !== undefined &&
               (upper.includes('DECIMAL') || upper.includes('NUMERIC'))) {
-            fullType = `${fullType}(${params.precision}, ${params.scale})`;
+            fullType = `${fullType}(${params.precision},${params.scale})`;
           } else if (params.length !== undefined &&
                      (upper.includes('VARCHAR') || upper.includes('CHAR'))) {
             fullType = `${fullType}(${params.length})`;
@@ -181,7 +181,7 @@ export default function ExcelTab() {
       return 'DATE';
     } else if (lowerName.endsWith('_amt') || lowerName.includes('amount') || lowerName.includes('price') ||
                lowerName.includes('金额') || lowerName.includes('价格')) {
-      return 'DECIMAL(24, 6)';
+      return 'DECIMAL(24,6)';
     } else if (lowerName.endsWith('_cnt') || lowerName.includes('count') || lowerName.includes('num')) {
       return 'BIGINT';
     } else if (lowerName.startsWith('is_') || lowerName.endsWith('_flag') || lowerName.endsWith('_flg')) {
