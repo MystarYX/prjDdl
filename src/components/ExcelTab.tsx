@@ -614,17 +614,17 @@ export default function ExcelTab() {
     const fieldDefinitions = fields.map((field, index) => {
       const isFirst = index === 0;
       const comma = isFirst ? '  ' : '  ,';
-      const namePadded = `${field.name}${' '.repeat(maxNameLength - field.name.length)}`;
-      const typePadded = field.type + ' '.repeat(maxTypeLength - field.type.length);
-      const commentPadded = `'${field.comment}'${' '.repeat(maxCommentLength - field.comment.length)}`;
+      const namePadded = `${field.name}${' '.repeat(Math.max(0, maxNameLength - field.name.length))}`;
+      const typePadded = field.type + ' '.repeat(Math.max(0, maxTypeLength - field.type.length));
+      const commentPadded = `'${field.comment}'${' '.repeat(Math.max(0, maxCommentLength - field.comment.length))}`;
       
       return `${comma}${namePadded} ${typePadded} COMMENT ${commentPadded}`;
     }).join('\n');
 
     // 添加 etl_time 字段
-    const etlNamePadded = `etl_time${' '.repeat(maxNameLength - 'etl_time'.length)}`;
-    const etlTypePadded = 'string' + ' '.repeat(maxTypeLength - 'string'.length);
-    const etlCommentPadded = `'数据入库时间'${' '.repeat(maxCommentLength - '数据入库时间'.length)}`;
+    const etlNamePadded = `etl_time${' '.repeat(Math.max(0, maxNameLength - 'etl_time'.length))}`;
+    const etlTypePadded = 'string' + ' '.repeat(Math.max(0, maxTypeLength - 'string'.length));
+    const etlCommentPadded = `'数据入库时间'${' '.repeat(Math.max(0, maxCommentLength - '数据入库时间'.length))}`;
     const etlField = `  ,${etlNamePadded} ${etlTypePadded} COMMENT ${etlCommentPadded}`;
 
     const sql = `CREATE TABLE IF NOT EXISTS ${tableName}
@@ -763,10 +763,37 @@ LIFECYCLE 10;`;
       return;
     }
 
-    // 计算对齐的最大长度
+    // 先计算哪些字段需要码转名，以及对应的码转名字段描述
+    const fieldsNeedingCodeToName = new Set<number>();
+    const codeToNameDescMap = new Map<number, string>();
+    fields.forEach((field, index) => {
+      const rawFieldName = field.source.replace(/^m\./, '');
+      const matchedConfigs = codeToNameConfigs.filter(
+        (config: any) => config.mainTableField === rawFieldName
+      );
+      if (matchedConfigs.length > 0) {
+        fieldsNeedingCodeToName.add(index);
+        codeToNameDescMap.set(index, `${field.desc}名称`);
+      }
+    });
+
+    // 计算对齐的最大长度（包含原始字段和码转名字段）
     const maxSourceLength = Math.max(...fields.map(f => f.source.length));
-    const maxNameLength = Math.max(...fields.map(f => f.name.length));
-    const maxDescLength = Math.max(...fields.map(f => f.desc.length));
+    const maxNameLength = Math.max(...fields.map((f, i) => {
+      if (fieldsNeedingCodeToName.has(i)) {
+        // 如果需要码转名，比较原始字段名和码转名字段的长度
+        return Math.max(f.name.length, `${f.name}_name`.length);
+      }
+      return f.name.length;
+    }));
+    const maxDescLength = Math.max(...fields.map((f, i) => {
+      if (fieldsNeedingCodeToName.has(i)) {
+        // 如果需要码转名，比较原始字段描述和码转名字段描述的长度
+        const codeToNameDesc = codeToNameDescMap.get(i) || '';
+        return Math.max(f.desc.length, codeToNameDesc.length);
+      }
+      return f.desc.length;
+    }));
 
     // 生成SELECT语句和码转名字段（统一处理，使码转名字段紧跟在对应字段后面）
     const finalSelectFields: string[] = [];
@@ -781,9 +808,9 @@ LIFECYCLE 10;`;
       // 添加原始字段
       const isFirst = finalSelectFields.length === 0;
       const comma = isFirst ? ' ' : ',';
-      const sourcePadded = `${field.source}${' '.repeat(maxSourceLength - field.source.length)}`;
-      const namePadded = field.name + ' '.repeat(maxNameLength - field.name.length);
-      const descPadded = `'${field.desc}'${' '.repeat(maxDescLength - field.desc.length)}`;
+      const sourcePadded = `${field.source}${' '.repeat(Math.max(0, maxSourceLength - field.source.length))}`;
+      const namePadded = field.name + ' '.repeat(Math.max(0, maxNameLength - field.name.length));
+      const descPadded = `'${field.desc}'${' '.repeat(Math.max(0, maxDescLength - field.desc.length))}`;
       
       finalSelectFields.push(
         `${comma}${sourcePadded}  AS  ${namePadded}   -- ${descPadded}`
@@ -818,10 +845,10 @@ LIFECYCLE 10;`;
           
           requireFieldList.forEach((reqField: string) => {
             const codeToNameSource = `${tableAlias}.${reqField}`;
-            const codeToNameSourcePadded = `${codeToNameSource}${' '.repeat(maxSourceLength - codeToNameSource.length)}`;
-            const codeToNameNamePadded = `${field.name}_name${' '.repeat(maxNameLength - `${field.name}_name`.length)}`;
+            const codeToNameSourcePadded = `${codeToNameSource}${' '.repeat(Math.max(0, maxSourceLength - codeToNameSource.length))}`;
+            const codeToNameNamePadded = `${field.name}_name${' '.repeat(Math.max(0, maxNameLength - `${field.name}_name`.length))}`;
             const codeToNameDesc = `${field.desc}名称`;
-            const codeToNameDescPadded = `'${codeToNameDesc}'${' '.repeat(maxDescLength - codeToNameDesc.length)}`;
+            const codeToNameDescPadded = `'${codeToNameDesc}'${' '.repeat(Math.max(0, maxDescLength - codeToNameDesc.length))}`;
             
             // 生成INSERT语句中的码转名字段，紧跟在对应字段后面
             finalSelectFields.push(
@@ -871,9 +898,9 @@ LIFECYCLE 10;`;
     });
 
     // 添加 etl_time 字段
-    const etlSourcePadded = `current_timestamp()${' '.repeat(maxSourceLength - 'current_timestamp()'.length)}`;
-    const etlNamePadded = `etl_time${' '.repeat(maxNameLength - 'etl_time'.length)}`;
-    const etlDescPadded = `'数据生成时间'${' '.repeat(maxDescLength - '数据生成时间'.length)}`;
+    const etlSourcePadded = `current_timestamp()${' '.repeat(Math.max(0, maxSourceLength - 'current_timestamp()'.length))}`;
+    const etlNamePadded = `etl_time${' '.repeat(Math.max(0, maxNameLength - 'etl_time'.length))}`;
+    const etlDescPadded = `'数据生成时间'${' '.repeat(Math.max(0, maxDescLength - '数据生成时间'.length))}`;
     const etlField = `,${etlSourcePadded}  AS  ${etlNamePadded}   -- ${etlDescPadded}`;
 
     const sql = 'INSERT OVERWRITE TABLE\t' + targetTableName + " PARTITION (pt ='${bdp.system.bizdate}')\n" +
