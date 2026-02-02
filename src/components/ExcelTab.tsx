@@ -768,27 +768,34 @@ LIFECYCLE 10;`;
     const maxNameLength = Math.max(...fields.map(f => f.name.length));
     const maxDescLength = Math.max(...fields.map(f => f.desc.length));
 
-    // 生成SELECT语句
-    const selectFields = fields.map((field, index) => {
-      const isFirst = index === 0;
-      const comma = isFirst ? ' ' : ',';
-      const sourcePadded = `${field.source}${' '.repeat(maxSourceLength - field.source.length)}`;
-      const namePadded = field.name + ' '.repeat(maxNameLength - field.name.length);
-      const descPadded = `'${field.desc}'${' '.repeat(maxDescLength - field.desc.length)}`;
-      
-      return `${comma}${sourcePadded}  AS  ${namePadded}   -- ${descPadded}`;
-    }).join('\n');
-
-    // 生成码转名字段
-    const codeToNameFields: string[] = [];
+    // 生成SELECT语句和码转名字段（统一处理，使码转名字段紧跟在对应字段后面）
+    const finalSelectFields: string[] = [];
     const joins: string[] = [];
     
     // 自动生成表别名的计数器
     let aliasCounter = 1;
     const aliasMap = new Map<string, string>(); // 表英文名 -> 生成的别名
 
-    // 检查每个字段是否需要码转名
+    // 检查每个字段是否需要码转名，并生成最终的SELECT字段列表
     fields.forEach((field, fieldIndex) => {
+      // 添加原始字段
+      const isFirst = finalSelectFields.length === 0;
+      const comma = isFirst ? ' ' : ',';
+      const sourcePadded = `${field.source}${' '.repeat(maxSourceLength - field.source.length)}`;
+      const namePadded = field.name + ' '.repeat(maxNameLength - field.name.length);
+      const descPadded = `'${field.desc}'${' '.repeat(maxDescLength - field.desc.length)}`;
+      
+      finalSelectFields.push(
+        `${comma}${sourcePadded}  AS  ${namePadded}   -- ${descPadded}`
+      );
+      
+      // 提取原始字段名（去掉m.前缀）
+      let rawFieldName = field.source.replace(/^m\./, '');
+      
+      // 在码转名维表配置中查找匹配
+      const matchedConfigs = codeToNameConfigs.filter(
+        (config: any) => config.mainTableField === rawFieldName
+      );
       // 提取原始字段名（去掉m.前缀）
       let rawFieldName = field.source.replace(/^m\./, '');
       
@@ -819,12 +826,13 @@ LIFECYCLE 10;`;
           requireFieldList.forEach((reqField: string) => {
             const codeToNameSource = `${tableAlias}.${reqField}`;
             const codeToNameSourcePadded = `${codeToNameSource}${' '.repeat(maxSourceLength - codeToNameSource.length)}`;
+            const codeToNameNamePadded = `${field.name}_name${' '.repeat(maxNameLength - `${field.name}_name`.length)}`;
             const codeToNameDesc = `${field.desc}名称`;
             const codeToNameDescPadded = `'${codeToNameDesc}'${' '.repeat(maxDescLength - codeToNameDesc.length)}`;
             
-            // 生成INSERT语句中的码转名字段
-            codeToNameFields.push(
-              `,${codeToNameSourcePadded}  AS  ${field.name}_name   -- ${codeToNameDescPadded}`
+            // 生成INSERT语句中的码转名字段，紧跟在对应字段后面
+            finalSelectFields.push(
+              `,${codeToNameSourcePadded}  AS  ${codeToNameNamePadded}   -- ${codeToNameDescPadded}`
             );
             
             // 记录新增字段信息（用于DWD建表SQL）
@@ -877,8 +885,7 @@ LIFECYCLE 10;`;
 
     const sql = 'INSERT OVERWRITE TABLE\t' + targetTableName + " PARTITION (pt ='${bdp.system.bizdate}')\n" +
 'SELECT\n' +
-selectFields + '\n' +
-codeToNameFields.join('\n') + '\n' +
+finalSelectFields.join('\n') + '\n' +
 etlField + '\n' +
 'FROM\n' +
 '  ' + sourceTableName + ' m\n' +
@@ -889,7 +896,7 @@ etlField + '\n' +
     setInsertSQL(sql);
     
     // INSERT 语句生成后，如果有码转名字段，立即重新生成 DWD 表结构
-    if (codeToNameFields.length > 0) {
+    if (codeToNameFieldsRef.current.size > 0) {
       // 立即调用 generateDWDSQL，传入当前最新的码转名字段映射
       // 使用 setTimeout 确保 codeToNameFieldsMap 的 setState 已执行
       setTimeout(() => {
