@@ -60,14 +60,23 @@ export default function ExcelTab() {
 
   // 页面加载时从 localStorage 恢复规则
   useEffect(() => {
+    console.log('=== ExcelTab 组件加载 ===');
+    console.log('环境:', process.env.NODE_ENV);
+    console.log('域名:', window.location.hostname);
+
     const loadRules = () => {
       const saved = localStorage.getItem('ddl_generator_global_rules');
       if (saved) {
         try {
-          setGlobalRules(JSON.parse(saved));
+          const parsed = JSON.parse(saved);
+          console.log('加载规则数量:', parsed.length);
+          console.log('第一个规则:', parsed[0]);
+          setGlobalRules(parsed);
         } catch (e) {
           console.error('Failed to load rules:', e);
         }
+      } else {
+        console.log('localStorage 中没有规则，将使用默认规则');
       }
     };
 
@@ -79,7 +88,10 @@ export default function ExcelTab() {
       // 监听规则管理器的变化
       if (e.key === 'ddl_generator_global_rules' && e.newValue) {
         try {
-          setGlobalRules(JSON.parse(e.newValue));
+          const parsed = JSON.parse(e.newValue);
+          console.log('规则更新，数量:', parsed.length);
+          console.log('第一个规则:', parsed[0]);
+          setGlobalRules(parsed);
           // 触发 DWD 重新生成
           setRefreshDWD(prev => prev + 1);
         } catch (err) {
@@ -89,6 +101,7 @@ export default function ExcelTab() {
 
       // 监听码转名维表配置的变化
       if (e.key === 'codeToNameConfig') {
+        console.log('码转名配置更新');
         // 触发 INSERT 语句重新生成
         setRefreshInsert(prev => prev + 1);
       }
@@ -166,6 +179,14 @@ export default function ExcelTab() {
           } else if (params.precision !== undefined &&
                      (upper.includes('FLOAT') || upper.includes('DOUBLE'))) {
             fullType = `${fullType}(${params.precision})`;
+          }
+          
+          // 如果是 DECIMAL 类型但没有参数，使用默认参数
+          if ((upper.includes('DECIMAL') || upper.includes('NUMERIC')) && 
+              fullType === upper && params.precision === undefined) {
+            console.warn(`DECIMAL 类型 ${fieldName} 缺少参数，使用默认参数 (24,6)`);
+            console.warn('规则参数:', params);
+            fullType = `${fullType}(24,6)`;
           }
           
           return fullType;
