@@ -4,8 +4,8 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: {
-    default: 'SQL 建表语句生成器',
-    template: '%s | SQL 建表语句生成器',
+    default: 'DDL工作集',
+    template: '%s | DDL工作集',
   },
   description: 'SQL 建表语句生成器，支持多种数据库类型，自动解析 SQL 查询并生成符合规范的建表 DDL。',
   keywords: [

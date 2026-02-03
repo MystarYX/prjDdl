@@ -548,7 +548,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gray-50 p-6 font-sans">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-center text-gray-800 mb-2">SQL建表语句生成器</h1>
+        <h1 className="text-3xl font-bold text-center text-gray-800 mb-2">DDL工作集</h1>
         <p className="text-center text-gray-600 mb-8">自动解析SQL查询，生成符合规范的建表语句</p>
 
         {/* 标签页导航 */}
