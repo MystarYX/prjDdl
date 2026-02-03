@@ -132,10 +132,6 @@ export default function ExcelTab() {
       // 稍微延迟以确保状态已更新
       setTimeout(() => {
         generateInsertSQL();
-        // INSERT 语句生成后，重新生成 DWD 表结构（可能包含新的码转名字段）
-        setTimeout(() => {
-          generateDWDSQL();
-        }, 100);
       }, 100);
     }
   }, [refreshInsert, data]);
@@ -940,15 +936,6 @@ etlField + '\n' +
 "  m.pt ='${bdp.system.bizdate}'";
 
     setInsertSQL(sql);
-    
-    // INSERT 语句生成后，如果有码转名字段，立即重新生成 DWD 表结构
-    if (codeToNameFieldsRef.current.size > 0) {
-      // 立即调用 generateDWDSQL，传入当前最新的码转名字段映射
-      // 使用 setTimeout 确保 codeToNameFieldsMap 的 setState 已执行
-      setTimeout(() => {
-        generateDWDSQL(codeToNameFieldsRef.current);
-      }, 50);
-    }
   };
 
   // 复制SQL到剪贴板
