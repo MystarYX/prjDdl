@@ -20,7 +20,7 @@ interface ExcelData {
 interface GlobalRule {
   id: string;
   keywords: string[];
-  matchType: 'contains' | 'equals' | 'regex';
+  matchType: 'contains' | 'equals' | 'prefix' | 'suffix';
   targetField: 'name' | 'comment';
   targetDatabases: string[];
   dataTypes: Record<string, string>;
