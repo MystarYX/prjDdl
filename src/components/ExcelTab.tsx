@@ -240,24 +240,8 @@ export default function ExcelTab() {
       }
     }
 
-    // 如果没有匹配到规则，根据字段名后缀推断类型
-    const lowerName = safeFieldName.toLowerCase();
-    if (lowerName.endsWith('_time') || lowerName.endsWith('time') || lowerName.includes('timestamp')) {
-      return 'TIMESTAMP';
-    } else if (lowerName.endsWith('_date') || lowerName.includes('date')) {
-      return 'DATE';
-    } else if (lowerName.endsWith('_amt') || lowerName.includes('amount') || lowerName.includes('price') ||
-               lowerName.includes('金额') || lowerName.includes('价格')) {
-      return 'DECIMAL(24,6)';
-    } else if (lowerName.endsWith('_cnt') || lowerName.includes('count') || lowerName.includes('num')) {
-      return 'BIGINT';
-    } else if (lowerName.startsWith('is_') || lowerName.endsWith('_flag') || lowerName.endsWith('_flg')) {
-      return 'STRING';
-    } else if (lowerName.includes('id') || lowerName.includes('code')) {
-      return 'STRING';
-    }
-
-    // 默认使用 STRING
+    // 如果没有匹配到规则，使用固定的默认类型（ExcelTab 只生成 Spark SQL）
+    console.log(`ℹ️ 字段 [${safeFieldName}] 未匹配到任何规则，使用默认类型 STRING`);
     return 'STRING';
   };
 

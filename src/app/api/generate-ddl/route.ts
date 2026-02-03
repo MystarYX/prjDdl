@@ -8,7 +8,7 @@ interface FieldInfo {
 
 interface InferenceRule {
   keywords: string[];
-  matchType: 'contains' | 'equals' | 'regex';
+  matchType: 'contains' | 'equals' | 'regex' | 'prefix' | 'suffix';
   targetField: 'name' | 'comment';
   dataType: string;
   priority: number;
@@ -607,10 +607,11 @@ interface TypeInfo {
   length?: number;
 }
 
-function inferFieldType(fieldName: string, fieldComment: string, customRules?: InferenceRule[]): TypeInfo {
+function inferFieldType(fieldName: string, fieldComment: string, customRules?: InferenceRule[], databaseType?: DatabaseType): TypeInfo {
   const name = fieldName.toLowerCase();
   const comment = fieldComment.toLowerCase();
 
+  // 只使用规则管理器配置的规则
   if (customRules && customRules.length > 0) {
     const sortedRules = [...customRules].sort((a, b) => a.priority - b.priority);
 
@@ -623,6 +624,10 @@ function inferFieldType(fieldName: string, fieldComment: string, customRules?: I
         if (rule.matchType === 'equals' && targetText === keywordLower) {
           return { type: rule.dataType, precision: rule.precision, scale: rule.scale, length: rule.length };
         } else if (rule.matchType === 'contains' && targetText.includes(keywordLower)) {
+          return { type: rule.dataType, precision: rule.precision, scale: rule.scale, length: rule.length };
+        } else if (rule.matchType === 'prefix' && targetText.startsWith(keywordLower)) {
+          return { type: rule.dataType, precision: rule.precision, scale: rule.scale, length: rule.length };
+        } else if (rule.matchType === 'suffix' && targetText.endsWith(keywordLower)) {
           return { type: rule.dataType, precision: rule.precision, scale: rule.scale, length: rule.length };
         } else if (rule.matchType === 'regex') {
           try {
@@ -638,38 +643,14 @@ function inferFieldType(fieldName: string, fieldComment: string, customRules?: I
     }
   }
 
-  // 默认规则
-  if (['fcytp', 'scytp', 'cytp', 'currency_type'].includes(name) || name.includes('币种代码') || comment.includes('币种代码')) {
+  // 如果没有匹配到规则，根据数据库类型返回固定的默认类型
+  if (databaseType === 'spark') {
     return { type: 'STRING' };
-  }
-  if (name.includes('mode') || name.includes('code') || name.includes('icode') || name.includes('代码') || name.includes('编码')) {
-    return { type: 'STRING' };
-  }
-  if ((name.includes('date') || name.includes('日期')) && !name.includes('day') && !name.includes('days')) {
-    return { type: 'DATE' };
-  }
-  if (name.includes('time') || name.includes('timestamp') || name.includes('时间')) {
-    return { type: 'TIMESTAMP' };
-  }
-  if (['org', 'trcl', 'cust', 'stff', 'user', 'dept'].some(k => name.includes(k))) {
-    return { type: 'STRING' };
-  }
-  if (['_name', '_dscr', '_rmrk', 'name'].some(k => name.includes(k)) || name.includes('描述') || name.includes('备注')) {
-    return { type: 'STRING' };
-  }
-  if (name.includes('flag') || name.startsWith('is_') || name.includes('标记') || name.includes('是否')) {
-    return { type: 'STRING' };
-  }
-  if (name.includes('days') || (name.includes('day') && name !== 'weekday')) {
-    return { type: 'DECIMAL', precision: 24, scale: 6 };
-  }
-  if (['amt', 'amount', 'price', 'ocy', 'rcy', 'scy', 'elmn', 'crdt', 'totl', 'ocpt', '金额', '价格'].some(k => name.includes(k))) {
-    return { type: 'DECIMAL', precision: 24, scale: 6 };
-  }
-  if (['qty', 'quantity', 'cnt', 'count', '数量'].some(k => name.includes(k))) {
-    return { type: 'DECIMAL', precision: 24, scale: 6 };
+  } else if (databaseType === 'mysql' || databaseType === 'starrocks') {
+    return { type: 'VARCHAR', length: 256 };
   }
 
+  // 默认返回 STRING
   return { type: 'STRING' };
 }
 
@@ -849,7 +830,7 @@ function generateDDL(fields: FieldInfo[], customRules: Record<string, InferenceR
   // 调整字段：优先使用别名作为字段名
   const adjustedFields = fields.map(field => {
     const fieldName = field.alias || field.name;
-    const typeInfo = inferFieldType(fieldName, field.comment, dbRules);
+    const typeInfo = inferFieldType(fieldName, field.comment, dbRules, databaseType);
     const mappedType = mapDataType(typeInfo, databaseType);
     return {
       name: fieldName,
