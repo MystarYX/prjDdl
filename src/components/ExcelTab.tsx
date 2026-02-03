@@ -1221,18 +1221,39 @@ etlField + '\n' +
                   <div className="space-y-2">
                     <Button
                       onClick={() => {
-                        // 点击生成按钮时，使用最新的码转名字段信息重新生成 DWD
-                        generateDWDSQL(codeToNameFieldsRef.current);
+                        // 点击生成按钮时，重新加载规则管理器的规则
+                        console.log('=== 生成 DWD：重新检测规则管理器 ===');
+                        const savedRules = localStorage.getItem('ddl_generator_global_rules');
+                        if (savedRules) {
+                          try {
+                            const parsed = JSON.parse(savedRules);
+                            console.log('从 localStorage 重新加载规则，数量:', parsed.length);
+                            console.log('第一个规则:', parsed[0]);
+                            setGlobalRules(parsed);
+                            
+                            // 稍微延迟确保状态更新后再生成 DWD
+                            setTimeout(() => {
+                              generateDWDSQL(codeToNameFieldsRef.current);
+                            }, 100);
+                          } catch (e) {
+                            console.error('重新加载规则失败:', e);
+                            // 即使加载失败，也尝试生成 DWD
+                            generateDWDSQL(codeToNameFieldsRef.current);
+                          }
+                        } else {
+                          console.log('localStorage 中没有规则，直接生成 DWD');
+                          generateDWDSQL(codeToNameFieldsRef.current);
+                        }
                       }}
                       variant="default"
                       className="w-full bg-blue-600 hover:bg-blue-700 gap-2"
                     >
                       <RefreshCw className="w-4 h-4" />
-                      生成 DWD（与 INSERT 字段保持一致）
+                      生成 DWD（重新检测规则）
                     </Button>
                     {codeToNameFieldsRef.current.size > 0 && (
                       <p className="text-xs text-orange-600 dark:text-orange-400 text-center">
-                        检测到 {Array.from(codeToNameFieldsRef.current.values()).flat().length} 个码转名字段，请点击按钮更新 DWD 表结构
+                        检测到 {Array.from(codeToNameFieldsRef.current.values()).flat().length} 个码转名字段
                       </p>
                     )}
                   </div>
