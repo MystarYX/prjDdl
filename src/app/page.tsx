@@ -709,12 +709,12 @@ export default function Home() {
 
             <div className="bg-blue-50 p-4 rounded-lg mb-6 text-sm text-blue-700">
               <strong>💡 提示：</strong> 规则会自动保存到浏览器，刷新页面后可继续使用。<br/>
-              <strong>正则匹配示例：</strong>
+              <strong>匹配方式说明：</strong>
               <ul className="list-disc list-inside ml-4 mt-1">
-                <li><code className="bg-blue-100 px-1 rounded">^amt$</code> - 完全匹配字段名 "amt"</li>
-                <li><code className="bg-blue-100 px-1 rounded">amt$</code> - 匹配以 "amt" 结尾的字段</li>
-                <li><code className="bg-blue-100 px-1 rounded">^price</code> - 匹配以 "price" 开头的字段</li>
-                <li><code className="bg-blue-100 px-1 rounded">.*amount.*</code> - 匹配包含 "amount" 的字段</li>
+                <li><strong>包含</strong> - 字段名或注释中包含关键词（如 "amt" 匹配 "amount"）</li>
+                <li><strong>等于</strong> - 字段名或注释完全等于关键词</li>
+                <li><strong>前缀</strong> - 字段名或注释以关键词开头（如 "price" 匹配 "price_total"）</li>
+                <li><strong>后缀</strong> - 字段名或注释以关键词结尾（如 "amt" 匹配 "trans_amt"）</li>
               </ul>
             </div>
 
@@ -744,7 +744,8 @@ export default function Home() {
                       >
                         <option value="contains">包含</option>
                         <option value="equals">等于</option>
-                        <option value="regex">正则</option>
+                        <option value="prefix">前缀</option>
+                        <option value="suffix">后缀</option>
                       </select>
                     </div>
 

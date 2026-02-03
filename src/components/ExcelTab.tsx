@@ -151,20 +151,10 @@ export default function ExcelTab() {
         matches = keywords.some(keyword => matchField.includes(keyword));
       } else if (rule.matchType === 'equals') {
         matches = keywords.some(keyword => matchField === keyword);
-      } else if (rule.matchType === 'regex') {
-        try {
-          console.log(`正则匹配: 字段="${matchField}", 关键词=[${keywords.join(', ')}]`);
-          matches = keywords.some(keyword => {
-            const regex = new RegExp(keyword);
-            const result = regex.test(matchField);
-            console.log(`  正则="${keyword}" -> ${result}`);
-            return result;
-          });
-          console.log(`  正则匹配结果: ${matches}`);
-        } catch (e) {
-          console.error('Invalid regex pattern in keywords:', keywords);
-          console.error('错误详情:', e);
-        }
+      } else if (rule.matchType === 'prefix') {
+        matches = keywords.some(keyword => matchField.startsWith(keyword));
+      } else if (rule.matchType === 'suffix') {
+        matches = keywords.some(keyword => matchField.endsWith(keyword));
       }
 
       if (matches) {
