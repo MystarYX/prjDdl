@@ -708,7 +708,14 @@ export default function Home() {
             </div>
 
             <div className="bg-blue-50 p-4 rounded-lg mb-6 text-sm text-blue-700">
-              <strong>💡 提示：</strong> 规则会自动保存到浏览器，刷新页面后可继续使用。
+              <strong>💡 提示：</strong> 规则会自动保存到浏览器，刷新页面后可继续使用。<br/>
+              <strong>正则匹配示例：</strong>
+              <ul className="list-disc list-inside ml-4 mt-1">
+                <li><code className="bg-blue-100 px-1 rounded">^amt$</code> - 完全匹配字段名 "amt"</li>
+                <li><code className="bg-blue-100 px-1 rounded">amt$</code> - 匹配以 "amt" 结尾的字段</li>
+                <li><code className="bg-blue-100 px-1 rounded">^price</code> - 匹配以 "price" 开头的字段</li>
+                <li><code className="bg-blue-100 px-1 rounded">.*amount.*</code> - 匹配包含 "amount" 的字段</li>
+              </ul>
             </div>
 
             {/* 规则列表 */}

@@ -153,12 +153,17 @@ export default function ExcelTab() {
         matches = keywords.some(keyword => matchField === keyword);
       } else if (rule.matchType === 'regex') {
         try {
+          console.log(`正则匹配: 字段="${matchField}", 关键词=[${keywords.join(', ')}]`);
           matches = keywords.some(keyword => {
             const regex = new RegExp(keyword);
-            return regex.test(matchField);
+            const result = regex.test(matchField);
+            console.log(`  正则="${keyword}" -> ${result}`);
+            return result;
           });
+          console.log(`  正则匹配结果: ${matches}`);
         } catch (e) {
           console.error('Invalid regex pattern in keywords:', keywords);
+          console.error('错误详情:', e);
         }
       }
 
