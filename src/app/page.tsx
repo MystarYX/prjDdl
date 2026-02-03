@@ -377,9 +377,12 @@ export default function Home() {
   };
 
   const updateRule = (id: string, updates: Partial<GlobalRule>) => {
-    setGlobalRules(globalRules.map(rule =>
+    console.log('🔧 updateRule 被调用:', id, updates);
+    const updatedRules = globalRules.map(rule =>
       rule.id === id ? { ...rule, ...updates } : rule
-    ));
+    );
+    console.log('✅ 更新后的规则:', updatedRules.find(r => r.id === id));
+    setGlobalRules(updatedRules);
     saveRules();
   };
 
@@ -825,6 +828,8 @@ export default function Home() {
                             value={rule.dataTypes[dbType] || ''}
                             onChange={(e) => {
                               const newType = e.target.value;
+                              console.log('📝 类型改变:', dbType, '从', rule.dataTypes[dbType], '到', newType);
+                              
                               // 计算新的 typeParams
                               let newTypeParams = { ...rule.typeParams };
                               const upper = newType.toUpperCase();
@@ -833,20 +838,30 @@ export default function Home() {
                                 if (upper.includes('DECIMAL') || upper.includes('NUMERIC')) {
                                   // DECIMAL 类型默认参数 (24,6)
                                   newTypeParams[dbType] = { precision: 24, scale: 6 };
+                                  console.log('✨ 设置 DECIMAL 参数:', newTypeParams[dbType]);
                                 } else if (upper.includes('VARCHAR') || upper.includes('CHAR')) {
                                   // VARCHAR 类型默认参数 (255)
                                   newTypeParams[dbType] = { length: 255 };
+                                  console.log('✨ 设置 VARCHAR 参数:', newTypeParams[dbType]);
                                 } else if (upper.includes('FLOAT') || upper.includes('DOUBLE')) {
                                   // FLOAT 类型默认参数 (53)
                                   newTypeParams[dbType] = { precision: 53 };
+                                  console.log('✨ 设置 FLOAT 参数:', newTypeParams[dbType]);
                                 } else {
                                   // 其他类型不需要参数，清空参数
                                   delete newTypeParams[dbType];
+                                  console.log('✨ 清空参数');
                                 }
                               } else {
                                 // 未选择类型，清空参数
                                 delete newTypeParams[dbType];
+                                console.log('✨ 未选择类型，清空参数');
                               }
+
+                              console.log('🔄 调用 updateRule，更新内容:', {
+                                dataTypes: { ...rule.dataTypes, [dbType]: newType },
+                                typeParams: newTypeParams
+                              });
 
                               updateRule(rule.id, {
                                 dataTypes: { ...rule.dataTypes, [dbType]: newType },
