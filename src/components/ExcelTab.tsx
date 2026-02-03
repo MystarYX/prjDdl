@@ -142,8 +142,21 @@ export default function ExcelTab() {
 
   // 根据字段名和注释推断字段类型（使用规则管理器的规则）
   const inferFieldType = (fieldName: string, fieldComment: string): string => {
+    // 直接从 localStorage 读取最新的规则（确保使用最新规则）
+    let rulesToUse = globalRules;
+    const savedRules = localStorage.getItem('ddl_generator_global_rules');
+    if (savedRules) {
+      try {
+        const parsed = JSON.parse(savedRules);
+        rulesToUse = parsed;
+        console.log('🔍 inferFieldType: 使用 localStorage 中的最新规则，数量:', parsed.length);
+      } catch (e) {
+        console.error('❌ inferFieldType: 读取规则失败:', e);
+      }
+    }
+
     // 优先使用规则管理器的规则
-    for (const rule of globalRules) {
+    for (const rule of rulesToUse) {
       const matchField = rule.targetField === 'name' ? fieldName.toLowerCase() : fieldComment.toLowerCase();
       const keywords = rule.keywords.map(k => k.toLowerCase());
 
@@ -519,18 +532,6 @@ export default function ExcelTab() {
       setCodeToNameFieldsMap(new Map(extraCodeToNameFields));
     }
 
-    // 每次生成 DWD SQL 时，重新从 localStorage 加载最新的规则
-    const savedRules = localStorage.getItem('ddl_generator_global_rules');
-    if (savedRules) {
-      try {
-        const parsed = JSON.parse(savedRules);
-        console.log('🔄 generateDWDSQL: 重新加载规则，数量:', parsed.length);
-        setGlobalRules(parsed);
-      } catch (e) {
-        console.error('❌ generateDWDSQL: 加载规则失败:', e);
-      }
-    }
-
     const finalTableName = generateDWDTableName(dwdTableName);
     
     // 查找DWD所需的列
@@ -675,18 +676,6 @@ LIFECYCLE 10;`;
     if (!data) {
       setInsertSQL('');
       return;
-    }
-
-    // 每次生成 INSERT SQL 时，重新从 localStorage 加载最新的规则
-    const savedRules = localStorage.getItem('ddl_generator_global_rules');
-    if (savedRules) {
-      try {
-        const parsed = JSON.parse(savedRules);
-        console.log('🔄 generateInsertSQL: 重新加载规则，数量:', parsed.length);
-        setGlobalRules(parsed);
-      } catch (e) {
-        console.error('❌ generateInsertSQL: 加载规则失败:', e);
-      }
     }
 
     // 查找所需的列
