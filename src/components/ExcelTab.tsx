@@ -126,15 +126,15 @@ export default function ExcelTab() {
     }
   }, [refreshDWD, data, dwdTableName, globalRules]);
 
-  // 当码转名配置变化时，重新生成 INSERT SQL
-  useEffect(() => {
-    if (data && refreshInsert > 0) {
-      // 稍微延迟以确保状态已更新
-      setTimeout(() => {
-        generateInsertSQL();
-      }, 100);
-    }
-  }, [refreshInsert, data]);
+  // 已改为手动生成，不再自动生成 INSERT
+  // useEffect(() => {
+  //   if (data && refreshInsert > 0) {
+  //     // 稍微延迟以确保状态已更新
+  //     setTimeout(() => {
+  //       generateInsertSQL();
+  //     }, 100);
+  //   }
+  // }, [refreshInsert, data]);
 
   // 根据字段名和注释推断字段类型（使用规则管理器的规则）
   const inferFieldType = (fieldName: string, fieldComment: string): string => {
@@ -327,17 +327,19 @@ export default function ExcelTab() {
   };
 
   // 自动生成SQL（当表名或数据变化时）
-  useEffect(() => {
-    if (data && odsTableName) {
-      generateODSSQL();
-    }
-  }, [data, odsTableName]);
+  // 已改为手动生成，不再自动生成 ODS
+  // useEffect(() => {
+  //   if (data && odsTableName) {
+  //     generateODSSQL();
+  //   }
+  // }, [data, odsTableName]);
 
-  useEffect(() => {
-    if (data) {
-      generateInsertSQL();
-    }
-  }, [data, dwdTableName, odsTableName]);
+  // 已改为手动生成，不再自动生成 INSERT
+  // useEffect(() => {
+  //   if (data) {
+  //     generateInsertSQL();
+  //   }
+  // }, [data, dwdTableName, odsTableName]);
 
   const handleReset = () => {
     setData(null);
@@ -963,7 +965,7 @@ etlField + '\n' +
             </h1>
           </div>
           <p className="text-slate-600 dark:text-slate-400 text-lg">
-            上传 Excel 文件，自动生成 DWD 和 ODS 层建表 SQL 语句
+            上传 Excel 文件，手动生成 DWD、ODS 和 INSERT SQL 语句
           </p>
         </div>
 
@@ -1009,7 +1011,7 @@ etlField + '\n' +
 
               <div className="text-sm text-slate-500 dark:text-slate-400 space-y-1">
                 <p>• 支持最大 10MB 的文件</p>
-                <p>• 自动同时生成 ODS 和 DWD 两种建表语句</p>
+                <p>• 点击对应的生成按钮生成 ODS、DWD、INSERT 语句</p>
                 <p>• 数据将在本地浏览器中处理，不会上传到服务器</p>
               </div>
             </CardContent>
@@ -1146,6 +1148,20 @@ etlField + '\n' +
                     )}
                   </div>
 
+                  <div className="space-y-2">
+                    <Button
+                      onClick={() => {
+                        console.log('=== 生成 ODS ===');
+                        generateODSSQL();
+                      }}
+                      variant="default"
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 gap-2"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      生成 ODS
+                    </Button>
+                  </div>
+
                   {odsSQL && (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
@@ -1175,6 +1191,13 @@ etlField + '\n' +
                         readOnly
                         className="font-mono text-sm bg-slate-900 text-emerald-400 h-[300px] resize-x"
                       />
+                    </div>
+                  )}
+                  {!odsSQL && (
+                    <div className="text-sm text-slate-500 dark:text-slate-400 p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                      点击上方 <span className="font-bold text-emerald-600">"生成 ODS"</span> 按钮生成 ODS 建表语句<br />
+                      • 从"来源表"、"来源表描述"、"来源字段"列生成<br />
+                      • 自动添加分区字段和数据入库时间字段
                     </div>
                   )}
                 </CardContent>
@@ -1305,6 +1328,20 @@ etlField + '\n' +
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Button
+                      onClick={() => {
+                        console.log('=== 生成 INSERT ===');
+                        generateInsertSQL();
+                      }}
+                      variant="default"
+                      className="w-full bg-purple-600 hover:bg-purple-700 gap-2"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      生成 INSERT
+                    </Button>
+                  </div>
+
                   {insertSQL && (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
@@ -1339,7 +1376,7 @@ etlField + '\n' +
                           <AlertCircle className="w-4 h-4 text-orange-600 dark:text-orange-400 flex-shrink-0" />
                           <p className="text-sm text-orange-700 dark:text-orange-300">
                             INSERT 语句包含 <span className="font-bold">{Array.from(codeToNameFieldsRef.current.values()).flat().length}</span> 个码转名字段，
-                            请点击上方 <span className="font-bold">"生成 DWD"</span> 按钮确保 DWD 表结构字段一致
+                            请点击 DWD 卡片的 <span className="font-bold">"生成 DWD"</span> 按钮确保 DWD 表结构字段一致
                           </p>
                         </div>
                       )}
@@ -1347,12 +1384,10 @@ etlField + '\n' +
                   )}
                   {!insertSQL && (
                     <div className="text-sm text-slate-500 dark:text-slate-400 p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
-                      请确保Excel包含以下列以生成插入语句：<br />
-                      • 表英文名<br />
-                      • 来源表（会自动转换为ODS表名）<br />
-                      • 来源字段<br />
-                      • 字段名<br />
-                      • 字段描述
+                      点击上方 <span className="font-bold text-purple-600">"生成 INSERT"</span> 按钮生成插入语句<br />
+                      • 从"表英文名"、"来源表"、"来源字段"、"字段名"、"字段描述"列生成<br />
+                      • 来源表名自动转换为 ODS 表名<br />
+                      • 支持码转名维表配置
                     </div>
                   )}
                 </CardContent>
