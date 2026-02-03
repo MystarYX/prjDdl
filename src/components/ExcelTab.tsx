@@ -519,6 +519,18 @@ export default function ExcelTab() {
       setCodeToNameFieldsMap(new Map(extraCodeToNameFields));
     }
 
+    // 每次生成 DWD SQL 时，重新从 localStorage 加载最新的规则
+    const savedRules = localStorage.getItem('ddl_generator_global_rules');
+    if (savedRules) {
+      try {
+        const parsed = JSON.parse(savedRules);
+        console.log('🔄 generateDWDSQL: 重新加载规则，数量:', parsed.length);
+        setGlobalRules(parsed);
+      } catch (e) {
+        console.error('❌ generateDWDSQL: 加载规则失败:', e);
+      }
+    }
+
     const finalTableName = generateDWDTableName(dwdTableName);
     
     // 查找DWD所需的列
@@ -663,6 +675,18 @@ LIFECYCLE 10;`;
     if (!data) {
       setInsertSQL('');
       return;
+    }
+
+    // 每次生成 INSERT SQL 时，重新从 localStorage 加载最新的规则
+    const savedRules = localStorage.getItem('ddl_generator_global_rules');
+    if (savedRules) {
+      try {
+        const parsed = JSON.parse(savedRules);
+        console.log('🔄 generateInsertSQL: 重新加载规则，数量:', parsed.length);
+        setGlobalRules(parsed);
+      } catch (e) {
+        console.error('❌ generateInsertSQL: 加载规则失败:', e);
+      }
     }
 
     // 查找所需的列
