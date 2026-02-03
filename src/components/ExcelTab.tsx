@@ -119,10 +119,9 @@ export default function ExcelTab() {
   // 当规则变化时，重新生成 DWD SQL
   useEffect(() => {
     if (data && dwdTableName && refreshDWD > 0) {
-      // 稍微延迟以确保状态已更新
-      setTimeout(() => {
-        generateDWDSQL();
-      }, 100);
+      // 直接生成 DWD（不需要 setTimeout）
+      // inferFieldType 内部会从 localStorage 读取最新规则
+      generateDWDSQL();
     }
   }, [refreshDWD, data, dwdTableName, globalRules]);
 
@@ -138,30 +137,48 @@ export default function ExcelTab() {
 
   // 根据字段名和注释推断字段类型（使用规则管理器的规则）
   const inferFieldType = (fieldName: string, fieldComment: string): string => {
+    // 安全处理空值
+    const safeFieldName = fieldName || '';
+    const safeFieldComment = fieldComment || '';
+
     // 直接从 localStorage 读取最新的规则（确保使用最新规则）
     let rulesToUse = globalRules;
-    const savedRules = localStorage.getItem('ddl_generator_global_rules');
-    if (savedRules) {
-      try {
+    try {
+      const savedRules = localStorage.getItem('ddl_generator_global_rules');
+      if (savedRules) {
         const parsed = JSON.parse(savedRules);
-        rulesToUse = parsed;
-        console.log('🔍 inferFieldType: 使用 localStorage 中的最新规则，数量:', parsed.length);
-        // 打印所有规则的 matchType
-        console.log('📋 所有规则的匹配类型:', parsed.map((r: any) => ({
-          keywords: r.keywords,
-          matchType: r.matchType,
-          targetField: r.targetField,
-          dataType: r.dataTypes?.spark
-        })));
-      } catch (e) {
-        console.error('❌ inferFieldType: 读取规则失败:', e);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          rulesToUse = parsed;
+          console.log('🔍 inferFieldType: 使用 localStorage 中的最新规则，数量:', parsed.length);
+          // 打印所有规则的 matchType
+          console.log('📋 所有规则的匹配类型:', parsed.map((r: any) => ({
+            keywords: r.keywords,
+            matchType: r.matchType,
+            targetField: r.targetField,
+            dataType: r.dataTypes?.spark
+          })));
+        }
       }
+    } catch (e) {
+      console.error('❌ inferFieldType: 读取规则失败:', e);
     }
 
     // 优先使用规则管理器的规则
     for (const rule of rulesToUse) {
-      const matchField = rule.targetField === 'name' ? fieldName.toLowerCase() : fieldComment.toLowerCase();
-      const keywords = rule.keywords.map(k => k.toLowerCase());
+      // 安全处理空值和类型
+      const matchField = rule.targetField === 'name' 
+        ? safeFieldName.toLowerCase() 
+        : safeFieldComment.toLowerCase();
+      
+      // 安全处理 keywords
+      const keywords = Array.isArray(rule.keywords) 
+        ? rule.keywords.map(k => (k || '').toLowerCase()).filter(k => k.length > 0)
+        : [];
+
+      // 如果没有关键词，跳过此规则
+      if (keywords.length === 0) {
+        continue;
+      }
 
       let matches = false;
       if (rule.matchType === 'contains') {
@@ -169,9 +186,9 @@ export default function ExcelTab() {
       } else if (rule.matchType === 'equals') {
         matches = keywords.some(keyword => matchField === keyword);
       } else if (rule.matchType === 'prefix') {
-        matches = keywords.some(keyword => matchField.startsWith(keyword));
+        matches = keywords.some(keyword => matchField.startsWith(keyword.trim()));
       } else if (rule.matchType === 'suffix') {
-        matches = keywords.some(keyword => matchField.endsWith(keyword));
+        matches = keywords.some(keyword => matchField.endsWith(keyword.trim()));
       }
 
       // 打印匹配过程的详细信息
@@ -185,41 +202,43 @@ export default function ExcelTab() {
       }
 
       if (matches) {
-        const sparkType = rule.dataTypes['spark'] || rule.dataTypes['mysql'] || rule.dataTypes['starrocks'];
+        // 安全获取数据类型，添加默认值
+        const sparkType = rule.dataTypes?.['spark'] || rule.dataTypes?.['mysql'] || rule.dataTypes?.['starrocks'] || 'STRING';
         
         if (sparkType) {
-          const params = rule.typeParams['spark'] || rule.typeParams['mysql'] || rule.typeParams['starrocks'] || {};
-          let fullType = sparkType.toUpperCase();
+          const params = rule.typeParams?.['spark'] || rule.typeParams?.['mysql'] || rule.typeParams?.['starrocks'] || {};
+          // 安全处理 undefined 类型
+          const fullType = sparkType ? sparkType.toUpperCase() : 'STRING';
           
           // 添加参数
           const upper = fullType;
           if (params.precision !== undefined && params.scale !== undefined &&
               (upper.includes('DECIMAL') || upper.includes('NUMERIC'))) {
-            fullType = `${fullType}(${params.precision},${params.scale})`;
+            return `${fullType}(${params.precision},${params.scale})`;
           } else if (params.length !== undefined &&
                      (upper.includes('VARCHAR') || upper.includes('CHAR'))) {
-            fullType = `${fullType}(${params.length})`;
+            return `${fullType}(${params.length})`;
           } else if (params.precision !== undefined &&
                      (upper.includes('FLOAT') || upper.includes('DOUBLE'))) {
-            fullType = `${fullType}(${params.precision})`;
+            return `${fullType}(${params.precision})`;
           }
           
           // 如果是 DECIMAL 类型但没有参数，使用默认参数
           if ((upper.includes('DECIMAL') || upper.includes('NUMERIC')) && 
-              fullType === upper && params.precision === undefined) {
-            console.warn(`⚠️ DECIMAL 类型 [${fieldName}] 缺少参数，使用默认参数 (24,6)`);
-            fullType = `${fullType}(24,6)`;
+              params.precision === undefined) {
+            console.warn(`⚠️ DECIMAL 类型 [${safeFieldName}] 缺少参数，使用默认参数 (24,6)`);
+            return `${fullType}(24,6)`;
           }
           
           // 只在匹配到规则时打印日志
-          console.log(`✅ 字段 [${fieldName}] 匹配规则: ${rule.matchType} [${keywords.join(', ')}] -> 类型: ${fullType}`);
+          console.log(`✅ 字段 [${safeFieldName}] 匹配规则: ${rule.matchType} [${keywords.join(', ')}] -> 类型: ${fullType}`);
           return fullType;
         }
       }
     }
 
     // 如果没有匹配到规则，根据字段名后缀推断类型
-    const lowerName = fieldName.toLowerCase();
+    const lowerName = safeFieldName.toLowerCase();
     if (lowerName.endsWith('_time') || lowerName.endsWith('time') || lowerName.includes('timestamp')) {
       return 'TIMESTAMP';
     } else if (lowerName.endsWith('_date') || lowerName.includes('date')) {
@@ -1264,13 +1283,11 @@ etlField + '\n' +
                             console.log('✅ 规则详情:', JSON.stringify(parsed, null, 2));
                             setGlobalRules(parsed);
                             
-                            // 稍微延迟确保状态更新后再生成 DWD
+                            // 直接生成 DWD
                             // 注意：由于 inferFieldType 内部会从 localStorage 读取最新规则，
                             // 所以即使 globalRules state 未及时更新，也能使用最新规则
-                            setTimeout(() => {
-                              console.log('🔄 开始生成 DWD');
-                              generateDWDSQL(codeToNameFieldsRef.current);
-                            }, 100);
+                            console.log('🔄 开始生成 DWD');
+                            generateDWDSQL(codeToNameFieldsRef.current);
                           } catch (e) {
                             console.error('❌ 重新加载规则失败:', e);
                             // 即使加载失败，也尝试生成 DWD

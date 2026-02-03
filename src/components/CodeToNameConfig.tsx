@@ -29,24 +29,38 @@ export default function CodeToNameConfig({ onDataChange }: CodeToNameConfigProps
   const [editFormData, setEditFormData] = useState<Partial<ConfigRow>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 从 localStorage 加载数据
+  // 从 localStorage 加载数据（添加错误处理）
   useEffect(() => {
-    const savedData = localStorage.getItem('codeToNameConfig');
-    if (savedData) {
-      try {
-        setRows(JSON.parse(savedData));
-      } catch (err) {
-        console.error('加载配置失败', err);
+    try {
+      const savedData = localStorage.getItem('codeToNameConfig');
+      if (savedData) {
+        const parsed = JSON.parse(savedData);
+        // 验证数据格式
+        if (Array.isArray(parsed)) {
+          setRows(parsed);
+          console.log('✅ 成功加载码转名配置，数量:', parsed.length);
+        } else {
+          console.error('❌ 配置数据格式错误，应为数组');
+          setRows([]);
+        }
       }
+    } catch (err) {
+      console.error('❌ 加载码转名配置失败:', err);
+      setRows([]);
     }
   }, []);
 
-  // 保存数据到 localStorage
+  // 保存数据到 localStorage（添加错误处理）
   useEffect(() => {
-    localStorage.setItem('codeToNameConfig', JSON.stringify(rows));
-    // 通知父组件数据已变化，触发 ExcelTab 的 INSERT 和 DWD 重新生成
-    if (onDataChange) {
-      onDataChange();
+    try {
+      localStorage.setItem('codeToNameConfig', JSON.stringify(rows));
+      // 通知父组件数据已变化，触发 ExcelTab 的 INSERT 和 DWD 重新生成
+      if (onDataChange) {
+        onDataChange();
+      }
+    } catch (e) {
+      console.error('❌ 保存码转名配置失败:', e);
+      // 可以在这里添加用户提示，但目前只是记录日志
     }
   }, [rows, onDataChange]);
 

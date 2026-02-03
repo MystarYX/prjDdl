@@ -385,14 +385,42 @@ export default function Home() {
     setDirtyRules(new Set([...dirtyRules, id])); // 标记规则为脏
   };
 
-  // 手动保存单个规则
+  // 手动保存单个规则（添加验证）
   const saveSingleRule = (id: string) => {
+    // 验证规则数据
+    const ruleToSave = globalRules.find(r => r.id === id);
+    if (!ruleToSave) {
+      console.error('❌ 规则不存在:', id);
+      return;
+    }
+
+    // 验证关键词不为空
+    if (!ruleToSave.keywords || ruleToSave.keywords.length === 0) {
+      alert('请至少添加一个关键词');
+      return;
+    }
+
+    // 验证至少选择一个目标数据库
+    if (!ruleToSave.targetDatabases || ruleToSave.targetDatabases.length === 0) {
+      alert('请至少选择一个目标数据库');
+      return;
+    }
+
+    // 验证所有选择的数据库都有对应的类型
+    for (const dbType of ruleToSave.targetDatabases) {
+      if (!ruleToSave.dataTypes[dbType]) {
+        alert(`请为 ${DB_LABELS[dbType as keyof typeof DB_LABELS]} 选择字段类型`);
+        return;
+      }
+    }
+
     try {
       localStorage.setItem('ddl_generator_global_rules', JSON.stringify(globalRules));
       console.log('✅ 规则已保存到 localStorage');
       setDirtyRules(new Set([...dirtyRules].filter(r => r !== id))); // 清除脏标记
     } catch (e) {
       console.error('❌ 规则保存失败:', e);
+      alert('保存规则失败，可能是存储空间不足');
     }
   };
 
@@ -486,7 +514,31 @@ export default function Home() {
       if (rule.id !== ruleId) return rule;
 
       const newTypeParams = { ...rule.typeParams };
-      newTypeParams[dbType] = { ...newTypeParams[dbType], ...paramUpdates };
+      const currentParams = { ...newTypeParams[dbType], ...paramUpdates };
+
+      // 验证 DECIMAL 参数范围
+      if (paramUpdates.precision !== undefined) {
+        if (paramUpdates.precision < 1 || paramUpdates.precision > 65) {
+          console.warn('⚠️ DECIMAL 精度超出范围 (1-65)，已调整为有效值');
+          currentParams.precision = Math.min(65, Math.max(1, paramUpdates.precision));
+        }
+      }
+      if (paramUpdates.scale !== undefined) {
+        if (paramUpdates.scale < 0 || paramUpdates.scale > 30) {
+          console.warn('⚠️ DECIMAL 标度超出范围 (0-30)，已调整为有效值');
+          currentParams.scale = Math.min(30, Math.max(0, paramUpdates.scale));
+        }
+      }
+
+      // 验证 VARCHAR/CHAR 长度范围
+      if (paramUpdates.length !== undefined) {
+        if (paramUpdates.length < 1 || paramUpdates.length > 65535) {
+          console.warn('⚠️ VARCHAR/CHAR 长度超出范围 (1-65535)，已调整为有效值');
+          currentParams.length = Math.min(65535, Math.max(1, paramUpdates.length));
+        }
+      }
+
+      newTypeParams[dbType] = currentParams;
 
       return { ...rule, typeParams: newTypeParams };
     }));

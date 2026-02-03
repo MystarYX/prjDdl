@@ -14,6 +14,11 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // TypeScript 配置 - 排除不需要检查的目录
+  typescript: {
+    // 在构建时跳过 TypeScript 类型检查（因为我们只需要检查当前项目的文件）
+    ignoreBuildErrors: false,
+  },
 };
 
 export default nextConfig;
