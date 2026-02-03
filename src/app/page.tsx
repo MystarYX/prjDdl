@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import ExcelTab from '@/components/ExcelTab';
 import CodeToNameConfig from '@/components/CodeToNameConfig';
+import { useToast } from '@/hooks/use-toast';
 
 interface GlobalRule {
   id: string;
@@ -139,6 +140,8 @@ function KeywordInput({
 }
 
 export default function Home() {
+  const { success, error: toastError, warning } = useToast();
+  
   const [activeTab, setActiveTab] = useState('excel');  // 'excel' | 'generator' | 'rules' | 'codeToName'
   const [sqlInput, setSqlInput] = useState('');
   const [ddlOutput, setDdlOutput] = useState('');
@@ -292,12 +295,12 @@ export default function Home() {
 
   const handleGenerate = async () => {
     if (!sqlInput.trim()) {
-      setError('请输入SQL查询语句');
+      toastError('请输入SQL查询语句');
       return;
     }
 
     if (selectedDbTypes.length === 0) {
-      setError('请至少选择一个数据库类型');
+      toastError('请至少选择一个数据库类型');
       return;
     }
 
@@ -325,32 +328,35 @@ export default function Home() {
       } else {
         setDdlOutput(data.ddl);
       }
+      success('DDL 生成成功');
     } catch (err) {
-      setError(err instanceof Error ? err.message : '生成失败');
+      toastError(err instanceof Error ? err.message : '生成失败');
     } finally {
       setLoading(false);
     }
   };
 
   const handleCopy = () => {
+    if (!ddlOutput) {
+      warning('没有内容可复制');
+      return;
+    }
     navigator.clipboard.writeText(ddlOutput);
+    success('DDL 已复制到剪贴板');
   };
 
 
 
   const handleResetRules = () => {
-    if (confirm('确定要重置所有规则为默认值吗？')) {
-      setGlobalRules(JSON.parse(JSON.stringify(DEFAULT_GLOBAL_RULES)));
-      saveRules();
-    }
+    setGlobalRules(JSON.parse(JSON.stringify(DEFAULT_GLOBAL_RULES)));
+    saveRules();
+    success('规则已重置为默认值');
   };
 
   const handleClearLocalStorage = () => {
-    if (confirm('确定要清除所有保存的规则数据吗？这将删除localStorage中的所有规则，恢复为默认规则。')) {
-      localStorage.removeItem('ddl_generator_global_rules');
-      setGlobalRules(JSON.parse(JSON.stringify(DEFAULT_GLOBAL_RULES)));
-      alert('已清除localStorage，规则已恢复为默认值');
-    }
+    localStorage.removeItem('ddl_generator_global_rules');
+    setGlobalRules(JSON.parse(JSON.stringify(DEFAULT_GLOBAL_RULES)));
+    success('已清除 localStorage，规则已恢复为默认值');
   };
 
   const addRule = () => {
@@ -390,26 +396,26 @@ export default function Home() {
     // 验证规则数据
     const ruleToSave = globalRules.find(r => r.id === id);
     if (!ruleToSave) {
-      console.error('❌ 规则不存在:', id);
+      toastError('规则不存在');
       return;
     }
 
     // 验证关键词不为空
     if (!ruleToSave.keywords || ruleToSave.keywords.length === 0) {
-      alert('请至少添加一个关键词');
+      warning('请至少添加一个关键词');
       return;
     }
 
     // 验证至少选择一个目标数据库
     if (!ruleToSave.targetDatabases || ruleToSave.targetDatabases.length === 0) {
-      alert('请至少选择一个目标数据库');
+      warning('请至少选择一个目标数据库');
       return;
     }
 
     // 验证所有选择的数据库都有对应的类型
     for (const dbType of ruleToSave.targetDatabases) {
       if (!ruleToSave.dataTypes[dbType]) {
-        alert(`请为 ${DB_LABELS[dbType as keyof typeof DB_LABELS]} 选择字段类型`);
+        warning(`请为 ${DB_LABELS[dbType as keyof typeof DB_LABELS]} 选择字段类型`);
         return;
       }
     }
@@ -418,9 +424,10 @@ export default function Home() {
       localStorage.setItem('ddl_generator_global_rules', JSON.stringify(globalRules));
       console.log('✅ 规则已保存到 localStorage');
       setDirtyRules(new Set([...dirtyRules].filter(r => r !== id))); // 清除脏标记
+      success('规则已保存');
     } catch (e) {
       console.error('❌ 规则保存失败:', e);
-      alert('保存规则失败，可能是存储空间不足');
+      toastError('保存规则失败，可能是存储空间不足');
     }
   };
 

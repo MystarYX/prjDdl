@@ -8,7 +8,10 @@
     "preinstall": "npx only-allow pnpm",
     "lint": "eslint",
     "start": "bash ./scripts/start.sh",
-    "ts-check": "tsc -p tsconfig.json"
+    "ts-check": "tsc -p tsconfig.json",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "dependencies": {
     "@radix-ui/react-label": "^2.1.8",
@@ -20,18 +23,28 @@
     "next": "16.1.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "react-window": "^2.2.6",
+    "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/jest": "^30.0.0",
     "@types/node": "^20.19.30",
     "@types/react": "^19.2.9",
     "@types/react-dom": "^19.2.3",
+    "@types/react-window": "^2.0.0",
     "eslint": "^9.39.2",
     "eslint-config-next": "16.1.1",
+    "jest": "^30.2.0",
+    "jest-environment-jsdom": "^30.2.0",
     "only-allow": "^1.2.2",
     "tailwindcss": "^4",
+    "ts-jest": "^29.4.6",
     "typescript": "5.9.3"
   },
   "packageManager": "pnpm@9.0.0",

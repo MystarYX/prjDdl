@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Upload, Download, Plus, Trash2, Save, Database } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 export interface ConfigRow {
   id: string;
@@ -24,6 +25,8 @@ interface CodeToNameConfigProps {
 }
 
 export default function CodeToNameConfig({ onDataChange }: CodeToNameConfigProps) {
+  const { success, error: toastError, warning } = useToast();
+  
   const [rows, setRows] = useState<ConfigRow[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editFormData, setEditFormData] = useState<Partial<ConfigRow>>({});
@@ -87,7 +90,7 @@ export default function CodeToNameConfig({ onDataChange }: CodeToNameConfigProps
 
   const handleSave = () => {
     if (!editFormData.tableEnName || !editFormData.dimTableField || !editFormData.mainTableField) {
-      alert('请填写必填项：表英文名、维表关联字段、主表关联字段');
+      warning('请填写必填项：表英文名、维表关联字段、主表关联字段');
       return;
     }
 
@@ -96,6 +99,7 @@ export default function CodeToNameConfig({ onDataChange }: CodeToNameConfigProps
     ));
     setEditingId(null);
     setEditFormData({});
+    success('配置已保存');
   };
 
   const handleCancel = () => {
@@ -108,9 +112,8 @@ export default function CodeToNameConfig({ onDataChange }: CodeToNameConfigProps
   };
 
   const handleDelete = (id: string) => {
-    if (confirm('确定要删除这条配置吗？')) {
-      setRows(rows.filter(row => row.id !== id));
-    }
+    setRows(rows.filter(row => row.id !== id));
+    success('配置已删除');
   };
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -138,9 +141,9 @@ export default function CodeToNameConfig({ onDataChange }: CodeToNameConfigProps
         }));
 
         setRows([...rows, ...importedRows]);
-        alert(`成功导入 ${importedRows.length} 条配置`);
+        success(`成功导入 ${importedRows.length} 条配置`);
       } catch (err) {
-        alert('导入失败，请确保文件格式正确');
+        toastError('导入失败，请确保文件格式正确');
         console.error(err);
       }
     };
@@ -152,7 +155,7 @@ export default function CodeToNameConfig({ onDataChange }: CodeToNameConfigProps
 
   const handleExport = () => {
     if (rows.length === 0) {
-      alert('没有数据可以导出');
+      warning('没有数据可以导出');
       return;
     }
 
@@ -201,9 +204,8 @@ export default function CodeToNameConfig({ onDataChange }: CodeToNameConfigProps
             {rows.length > 0 && (
               <Button
                 onClick={() => {
-                  if (confirm('确定要清空所有配置吗？此操作不可恢复！')) {
-                    setRows([]);
-                  }
+                  setRows([]);
+                  success('所有配置已清空');
                 }}
                 variant="destructive"
                 className="gap-2"

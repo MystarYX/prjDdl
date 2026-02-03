@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Upload, FileSpreadsheet, AlertCircle, Download, Trash2, Copy, CheckCircle2, Code2, Database, RefreshCw } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 interface ExcelData {
   headers: string[];
@@ -29,6 +30,8 @@ interface GlobalRule {
 }
 
 export default function ExcelTab() {
+  const { success, error: toastError, warning, info } = useToast();
+  
   const [data, setData] = useState<ExcelData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
@@ -978,14 +981,19 @@ etlField + '\n' +
 
   // 复制SQL到剪贴板
   const copySQL = async (sql: string, setCopied: (copied: boolean) => void) => {
-    if (!sql) return;
+    if (!sql) {
+      warning('没有内容可复制');
+      return;
+    }
     
     try {
       await navigator.clipboard.writeText(sql);
       setCopied(true);
+      success('SQL 已复制到剪贴板', { duration: 2000 });
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error('复制失败', err);
+      toastError('复制失败，请手动复制');
     }
   };
 
