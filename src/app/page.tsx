@@ -146,6 +146,7 @@ export default function Home() {
   const [error, setError] = useState('');
   const [selectedDbTypes, setSelectedDbTypes] = useState<string[]>(['spark']);
   const [globalRules, setGlobalRules] = useState<GlobalRule[]>(DEFAULT_GLOBAL_RULES);
+  const [dirtyRules, setDirtyRules] = useState<Set<string>>(new Set()); // 记录已修改但未保存的规则ID
 
   // 页面加载时从 localStorage 恢复规则
   useEffect(() => {
@@ -242,10 +243,9 @@ export default function Home() {
       console.log('保存的规则详情:', JSON.stringify(globalRules, null, 2));
       localStorage.setItem('ddl_generator_global_rules', JSON.stringify(globalRules));
       console.log('✅ localStorage 当前内容:', localStorage.getItem('ddl_generator_global_rules'));
-      alert('规则已保存');
+      setDirtyRules(new Set()); // 清除所有脏标记
     } catch (e) {
       console.error('❌ 规则保存失败:', e);
-      alert('保存失败');
     }
   };
 
@@ -367,12 +367,12 @@ export default function Home() {
       priority: 999
     };
     setGlobalRules([...globalRules, newRule]);
-    // 不再自动保存，等待用户手动点击保存按钮
+    setDirtyRules(new Set([...dirtyRules, newRule.id])); // 标记新规则为脏
   };
 
   const deleteRule = (id: string) => {
     setGlobalRules(globalRules.filter(r => r.id !== id));
-    // 不再自动保存，等待用户手动点击保存按钮
+    setDirtyRules(new Set([...dirtyRules].filter(r => r !== id))); // 移除脏标记
   };
 
   const updateRule = (id: string, updates: Partial<GlobalRule>) => {
@@ -382,7 +382,7 @@ export default function Home() {
     );
     console.log('✅ 更新后的规则:', updatedRules.find(r => r.id === id));
     setGlobalRules(updatedRules);
-    // 不再自动保存，等待用户手动点击保存按钮
+    setDirtyRules(new Set([...dirtyRules, id])); // 标记规则为脏
   };
 
   // 手动保存单个规则
@@ -390,10 +390,9 @@ export default function Home() {
     try {
       localStorage.setItem('ddl_generator_global_rules', JSON.stringify(globalRules));
       console.log('✅ 规则已保存到 localStorage');
-      alert('规则已保存');
+      setDirtyRules(new Set([...dirtyRules].filter(r => r !== id))); // 清除脏标记
     } catch (e) {
       console.error('❌ 规则保存失败:', e);
-      alert('保存失败');
     }
   };
 
@@ -733,7 +732,7 @@ export default function Home() {
             </div>
 
             <div className="bg-blue-50 p-4 rounded-lg mb-6 text-sm text-blue-700">
-              <strong>💡 提示：</strong> 规则会自动保存到浏览器，刷新页面后可继续使用。<br/>
+              <strong>💡 提示：</strong> 编辑规则后请点击"保存规则"按钮，规则将保存到浏览器缓存。<br/>
               <strong>匹配方式说明：</strong>
               <ul className="list-disc list-inside ml-4 mt-1">
                 <li><strong>包含</strong> - 字段名或注释中包含关键词（如 "amt" 匹配 "amount"）</li>
@@ -746,8 +745,12 @@ export default function Home() {
             {/* 规则列表 */}
             <div className="space-y-4">
               {globalRules.map((rule, index) => (
-                <div key={rule.id} className="border rounded-xl p-4 bg-gray-50">
-                  {/* 第一行：关键词、匹配方式、匹配字段 */}
+                <div 
+                  key={rule.id} 
+                  className={`border rounded-xl p-4 bg-gray-50 transition-colors ${
+                    dirtyRules.has(rule.id) ? 'border-blue-500 bg-blue-50' : ''
+                  }`}
+                >                  {/* 第一行：关键词、匹配方式、匹配字段 */}
                   <div className="grid grid-cols-[2fr_1fr_1fr] gap-3 mb-3">
                     {/* 关键词 */}
                     <div>
@@ -896,9 +899,13 @@ export default function Home() {
                   <div className="flex justify-end gap-2">
                     <button
                       onClick={() => saveSingleRule(rule.id)}
-                      className="px-4 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors"
+                      className={`px-4 py-1.5 text-white text-sm rounded-lg transition-colors ${
+                        dirtyRules.has(rule.id)
+                          ? 'bg-blue-600 hover:bg-blue-700'
+                          : 'bg-gray-400 hover:bg-gray-500 cursor-default'
+                      }`}
                     >
-                      保存规则
+                      {dirtyRules.has(rule.id) ? '保存规则' : '已保存'}
                     </button>
                     <button
                       onClick={() => deleteRule(rule.id)}
