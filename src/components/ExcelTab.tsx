@@ -338,12 +338,6 @@ export default function ExcelTab() {
   }, [data, odsTableName]);
 
   useEffect(() => {
-    if (data && dwdTableName) {
-      generateDWDSQL();
-    }
-  }, [data, dwdTableName]);
-
-  useEffect(() => {
     if (data) {
       generateInsertSQL();
     }
@@ -1300,6 +1294,13 @@ etlField + '\n' +
                         readOnly
                         className="font-mono text-sm bg-slate-900 text-blue-400 h-[300px] resize-x"
                       />
+                    </div>
+                  )}
+                  {!dwdSQL && (
+                    <div className="text-sm text-slate-500 dark:text-slate-400 p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                      点击上方 <span className="font-bold text-blue-600">"生成 DWD"</span> 按钮生成 DWD 建表语句<br />
+                      • 支持使用规则管理器配置的字段类型推断规则<br />
+                      • 支持码转名维表字段配置
                     </div>
                   )}
                 </CardContent>
