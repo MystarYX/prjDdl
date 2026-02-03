@@ -150,13 +150,17 @@ export default function Home() {
 
   // 页面加载时从 localStorage 恢复规则
   useEffect(() => {
+    console.log('=== 规则管理器页面加载 ===');
     const saved = localStorage.getItem('ddl_generator_global_rules');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
+        console.log('从 localStorage 加载规则数量:', parsed.length);
+        console.log('规则详情:', JSON.stringify(parsed, null, 2));
         
         // 检查是否是新格式（包含typeParams）
         if (parsed.length > 0 && !parsed[0].typeParams) {
+          console.log('检测到旧格式规则，开始迁移...');
           // 迁移旧数据到新格式
           const migrated = parsed.map((rule: any) => {
             // 从dataType中提取参数
@@ -212,24 +216,33 @@ export default function Home() {
             };
           });
           
+          console.log('迁移后的规则:', JSON.stringify(migrated, null, 2));
           setGlobalRules(migrated);
           // 保存迁移后的数据
           localStorage.setItem('ddl_generator_global_rules', JSON.stringify(migrated));
         } else {
           // 新格式，直接使用
+          console.log('检测到新格式规则，直接使用');
           setGlobalRules(parsed);
         }
       } catch (e) {
         console.error('Failed to load rules:', e);
         // 加载失败时使用默认规则
+        console.log('加载失败，使用默认规则');
         setGlobalRules(DEFAULT_GLOBAL_RULES);
       }
+    } else {
+      console.log('localStorage 中没有规则，使用默认规则');
+      setGlobalRules(DEFAULT_GLOBAL_RULES);
     }
   }, []);
 
   // 保存规则到 localStorage
   const saveRules = () => {
     try {
+      console.log('=== 保存规则到 localStorage ===');
+      console.log('规则数量:', globalRules.length);
+      console.log('规则详情:', JSON.stringify(globalRules, null, 2));
       localStorage.setItem('ddl_generator_global_rules', JSON.stringify(globalRules));
       setSaveStatus('✓ 已保存');
       setTimeout(() => setSaveStatus(''), 2000);
@@ -811,9 +824,36 @@ export default function Home() {
                           <label className="text-xs text-gray-500 block mb-1">{label}</label>
                           <select
                             value={rule.dataTypes[dbType] || ''}
-                            onChange={(e) => updateRule(rule.id, {
-                              dataTypes: { ...rule.dataTypes, [dbType]: e.target.value }
-                            })}
+                            onChange={(e) => {
+                              const newType = e.target.value;
+                              // 计算新的 typeParams
+                              let newTypeParams = { ...rule.typeParams };
+                              const upper = newType.toUpperCase();
+
+                              if (newType) {
+                                if (upper.includes('DECIMAL') || upper.includes('NUMERIC')) {
+                                  // DECIMAL 类型默认参数 (24,6)
+                                  newTypeParams[dbType] = { precision: 24, scale: 6 };
+                                } else if (upper.includes('VARCHAR') || upper.includes('CHAR')) {
+                                  // VARCHAR 类型默认参数 (255)
+                                  newTypeParams[dbType] = { length: 255 };
+                                } else if (upper.includes('FLOAT') || upper.includes('DOUBLE')) {
+                                  // FLOAT 类型默认参数 (53)
+                                  newTypeParams[dbType] = { precision: 53 };
+                                } else {
+                                  // 其他类型不需要参数，清空参数
+                                  delete newTypeParams[dbType];
+                                }
+                              } else {
+                                // 未选择类型，清空参数
+                                delete newTypeParams[dbType];
+                              }
+
+                              updateRule(rule.id, {
+                                dataTypes: { ...rule.dataTypes, [dbType]: newType },
+                                typeParams: newTypeParams
+                              });
+                            }}
                             className="w-full px-2 py-1.5 text-sm border rounded"
                             disabled={!rule.targetDatabases.includes(dbType)}
                           >
