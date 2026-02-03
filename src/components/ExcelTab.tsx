@@ -110,7 +110,7 @@ export default function ExcelTab() {
         generateDWDSQL();
       }, 100);
     }
-  }, [refreshDWD, data, dwdTableName]);
+  }, [refreshDWD, data, dwdTableName, globalRules]);
 
   // 当码转名配置变化时，重新生成 INSERT SQL
   useEffect(() => {
@@ -623,7 +623,7 @@ export default function ExcelTab() {
 
     // 添加 etl_time 字段
     const etlNamePadded = `etl_time${' '.repeat(Math.max(0, maxNameLength - 'etl_time'.length))}`;
-    const etlTypePadded = 'string' + ' '.repeat(Math.max(0, maxTypeLength - 'string'.length));
+    const etlTypePadded = 'TIMESTAMP' + ' '.repeat(Math.max(0, maxTypeLength - 'TIMESTAMP'.length));
     const etlCommentPadded = `'数据入库时间'${' '.repeat(Math.max(0, maxCommentLength - '数据入库时间'.length))}`;
     const etlField = `  ,${etlNamePadded} ${etlTypePadded} COMMENT ${etlCommentPadded}`;
 
