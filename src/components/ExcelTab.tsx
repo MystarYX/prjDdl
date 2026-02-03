@@ -146,6 +146,13 @@ export default function ExcelTab() {
         const parsed = JSON.parse(savedRules);
         rulesToUse = parsed;
         console.log('🔍 inferFieldType: 使用 localStorage 中的最新规则，数量:', parsed.length);
+        // 打印所有规则的 matchType
+        console.log('📋 所有规则的匹配类型:', parsed.map((r: any) => ({
+          keywords: r.keywords,
+          matchType: r.matchType,
+          targetField: r.targetField,
+          dataType: r.dataTypes?.spark
+        })));
       } catch (e) {
         console.error('❌ inferFieldType: 读取规则失败:', e);
       }
@@ -165,6 +172,16 @@ export default function ExcelTab() {
         matches = keywords.some(keyword => matchField.startsWith(keyword));
       } else if (rule.matchType === 'suffix') {
         matches = keywords.some(keyword => matchField.endsWith(keyword));
+      }
+
+      // 打印匹配过程的详细信息
+      if (rule.matchType !== 'contains') {
+        console.log(`🔎 测试规则 [${rule.matchType}]:`, {
+          matchField,
+          keywords,
+          ruleId: rule.id,
+          result: matches
+        });
       }
 
       if (matches) {
@@ -1248,8 +1265,10 @@ etlField + '\n' +
                             setGlobalRules(parsed);
                             
                             // 稍微延迟确保状态更新后再生成 DWD
+                            // 注意：由于 inferFieldType 内部会从 localStorage 读取最新规则，
+                            // 所以即使 globalRules state 未及时更新，也能使用最新规则
                             setTimeout(() => {
-                              console.log('🔄 开始生成 DWD，当前规则数量:', globalRules.length);
+                              console.log('🔄 开始生成 DWD');
                               generateDWDSQL(codeToNameFieldsRef.current);
                             }, 100);
                           } catch (e) {
