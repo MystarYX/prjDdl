@@ -146,7 +146,6 @@ export default function Home() {
   const [error, setError] = useState('');
   const [selectedDbTypes, setSelectedDbTypes] = useState<string[]>(['spark']);
   const [globalRules, setGlobalRules] = useState<GlobalRule[]>(DEFAULT_GLOBAL_RULES);
-  const [saveStatus, setSaveStatus] = useState('');
 
   // 页面加载时从 localStorage 恢复规则
   useEffect(() => {
@@ -243,10 +242,10 @@ export default function Home() {
       console.log('保存的规则详情:', JSON.stringify(globalRules, null, 2));
       localStorage.setItem('ddl_generator_global_rules', JSON.stringify(globalRules));
       console.log('✅ localStorage 当前内容:', localStorage.getItem('ddl_generator_global_rules'));
-      setSaveStatus('✓ 已保存');
-      setTimeout(() => setSaveStatus(''), 2000);
+      alert('规则已保存');
     } catch (e) {
       console.error('❌ 规则保存失败:', e);
+      alert('保存失败');
     }
   };
 
@@ -368,12 +367,12 @@ export default function Home() {
       priority: 999
     };
     setGlobalRules([...globalRules, newRule]);
-    saveRules();
+    // 不再自动保存，等待用户手动点击保存按钮
   };
 
   const deleteRule = (id: string) => {
     setGlobalRules(globalRules.filter(r => r.id !== id));
-    saveRules();
+    // 不再自动保存，等待用户手动点击保存按钮
   };
 
   const updateRule = (id: string, updates: Partial<GlobalRule>) => {
@@ -383,7 +382,19 @@ export default function Home() {
     );
     console.log('✅ 更新后的规则:', updatedRules.find(r => r.id === id));
     setGlobalRules(updatedRules);
-    saveRules();
+    // 不再自动保存，等待用户手动点击保存按钮
+  };
+
+  // 手动保存单个规则
+  const saveSingleRule = (id: string) => {
+    try {
+      localStorage.setItem('ddl_generator_global_rules', JSON.stringify(globalRules));
+      console.log('✅ 规则已保存到 localStorage');
+      alert('规则已保存');
+    } catch (e) {
+      console.error('❌ 规则保存失败:', e);
+      alert('保存失败');
+    }
   };
 
   const toggleAllDatabases = (ruleId: string, selectAll: boolean) => {
@@ -420,7 +431,7 @@ export default function Home() {
         targetDatabases: newTargetDatabases
       };
     }));
-    saveRules();
+    // 不再自动保存，等待用户手动点击保存按钮
   };
 
   const handleDatabaseChange = (ruleId: string, dbType: string, checked: boolean) => {
@@ -468,7 +479,7 @@ export default function Home() {
         targetDatabases: newTargetDatabases
       };
     }));
-    saveRules();
+    // 不再自动保存，等待用户手动点击保存按钮
   };
 
   const updateTypeParam = (ruleId: string, dbType: string, paramUpdates: any) => {
@@ -480,7 +491,7 @@ export default function Home() {
 
       return { ...rule, typeParams: newTypeParams };
     }));
-    saveRules();
+    // 不再自动保存，等待用户手动点击保存按钮
   };
 
   const hasTypeParams = (dataType: string) => {
@@ -699,7 +710,6 @@ export default function Home() {
               <h3 className="font-semibold text-gray-800">字段类型推断规则配置</h3>
               <span className="text-gray-500 text-sm">
                 已选择 {selectedDbTypes.length} 个数据库类型
-                {saveStatus && <span className="ml-2 text-green-600">{saveStatus}</span>}
               </span>
             </div>
             <p className="text-gray-600 mb-4 text-sm">
@@ -883,7 +893,13 @@ export default function Home() {
                   </div>
 
                   {/* 操作按钮 */}
-                  <div className="flex justify-end">
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={() => saveSingleRule(rule.id)}
+                      className="px-4 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors"
+                    >
+                      保存规则
+                    </button>
                     <button
                       onClick={() => deleteRule(rule.id)}
                       className="px-4 py-1.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors"
