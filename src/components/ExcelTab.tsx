@@ -141,24 +141,10 @@ export default function ExcelTab() {
 
   // 根据字段名和注释推断字段类型（使用规则管理器的规则）
   const inferFieldType = (fieldName: string, fieldComment: string): string => {
-    console.log('=== inferFieldType 开始 ===');
-    console.log('字段名:', fieldName);
-    console.log('字段注释:', fieldComment);
-    console.log('规则数量:', globalRules.length);
-    
     // 优先使用规则管理器的规则
     for (const rule of globalRules) {
       const matchField = rule.targetField === 'name' ? fieldName.toLowerCase() : fieldComment.toLowerCase();
       const keywords = rule.keywords.map(k => k.toLowerCase());
-
-      console.log('--- 检查规则 ---');
-      console.log('规则 ID:', rule.id);
-      console.log('关键词:', keywords);
-      console.log('匹配方式:', rule.matchType);
-      console.log('匹配字段:', rule.targetField);
-      console.log('实际匹配字段值:', matchField);
-      console.log('目标数据库:', rule.targetDatabases);
-      console.log('数据类型:', rule.dataTypes);
 
       let matches = false;
       if (rule.matchType === 'contains') {
@@ -171,11 +157,8 @@ export default function ExcelTab() {
         matches = keywords.some(keyword => matchField.endsWith(keyword));
       }
 
-      console.log('匹配结果:', matches);
-
       if (matches) {
         const sparkType = rule.dataTypes['spark'] || rule.dataTypes['mysql'] || rule.dataTypes['starrocks'];
-        console.log('推断的类型:', sparkType);
         
         if (sparkType) {
           const params = rule.typeParams['spark'] || rule.typeParams['mysql'] || rule.typeParams['starrocks'] || {};
@@ -197,19 +180,16 @@ export default function ExcelTab() {
           // 如果是 DECIMAL 类型但没有参数，使用默认参数
           if ((upper.includes('DECIMAL') || upper.includes('NUMERIC')) && 
               fullType === upper && params.precision === undefined) {
-            console.warn(`DECIMAL 类型 ${fieldName} 缺少参数，使用默认参数 (24,6)`);
-            console.warn('规则参数:', params);
+            console.warn(`⚠️ DECIMAL 类型 [${fieldName}] 缺少参数，使用默认参数 (24,6)`);
             fullType = `${fullType}(24,6)`;
           }
           
-          console.log('最终类型:', fullType);
-          console.log('=== inferFieldType 结束（匹配规则）===');
+          // 只在匹配到规则时打印日志
+          console.log(`✅ 字段 [${fieldName}] 匹配规则: ${rule.matchType} [${keywords.join(', ')}] -> 类型: ${fullType}`);
           return fullType;
         }
       }
     }
-
-    console.log('=== inferFieldType 结束（未匹配规则）===');
 
     // 如果没有匹配到规则，根据字段名后缀推断类型
     const lowerName = fieldName.toLowerCase();

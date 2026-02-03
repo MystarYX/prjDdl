@@ -155,12 +155,11 @@ export default function Home() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        console.log('从 localStorage 加载规则数量:', parsed.length);
-        console.log('规则详情:', JSON.stringify(parsed, null, 2));
+        console.log('✅ 从 localStorage 加载规则数量:', parsed.length);
         
         // 检查是否是新格式（包含typeParams）
         if (parsed.length > 0 && !parsed[0].typeParams) {
-          console.log('检测到旧格式规则，开始迁移...');
+          console.log('⚠️ 检测到旧格式规则，开始迁移...');
           // 迁移旧数据到新格式
           const migrated = parsed.map((rule: any) => {
             // 从dataType中提取参数
@@ -216,23 +215,23 @@ export default function Home() {
             };
           });
           
-          console.log('迁移后的规则:', JSON.stringify(migrated, null, 2));
+          console.log('✅ 规则迁移完成');
           setGlobalRules(migrated);
           // 保存迁移后的数据
           localStorage.setItem('ddl_generator_global_rules', JSON.stringify(migrated));
         } else {
           // 新格式，直接使用
-          console.log('检测到新格式规则，直接使用');
+          console.log('✅ 新格式规则，直接使用');
           setGlobalRules(parsed);
         }
       } catch (e) {
-        console.error('Failed to load rules:', e);
+        console.error('❌ 规则加载失败:', e);
         // 加载失败时使用默认规则
-        console.log('加载失败，使用默认规则');
+        console.log('ℹ️ 使用默认规则');
         setGlobalRules(DEFAULT_GLOBAL_RULES);
       }
     } else {
-      console.log('localStorage 中没有规则，使用默认规则');
+      console.log('ℹ️ localStorage 中没有规则，使用默认规则');
       setGlobalRules(DEFAULT_GLOBAL_RULES);
     }
   }, []);
@@ -240,14 +239,12 @@ export default function Home() {
   // 保存规则到 localStorage
   const saveRules = () => {
     try {
-      console.log('=== 保存规则到 localStorage ===');
-      console.log('规则数量:', globalRules.length);
-      console.log('规则详情:', JSON.stringify(globalRules, null, 2));
+      console.log('💾 保存规则到 localStorage，数量:', globalRules.length);
       localStorage.setItem('ddl_generator_global_rules', JSON.stringify(globalRules));
       setSaveStatus('✓ 已保存');
       setTimeout(() => setSaveStatus(''), 2000);
     } catch (e) {
-      console.error('Failed to save rules:', e);
+      console.error('❌ 规则保存失败:', e);
     }
   };
 
