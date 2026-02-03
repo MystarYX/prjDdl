@@ -240,7 +240,9 @@ export default function Home() {
   const saveRules = () => {
     try {
       console.log('💾 保存规则到 localStorage，数量:', globalRules.length);
+      console.log('保存的规则详情:', JSON.stringify(globalRules, null, 2));
       localStorage.setItem('ddl_generator_global_rules', JSON.stringify(globalRules));
+      console.log('✅ localStorage 当前内容:', localStorage.getItem('ddl_generator_global_rules'));
       setSaveStatus('✓ 已保存');
       setTimeout(() => setSaveStatus(''), 2000);
     } catch (e) {

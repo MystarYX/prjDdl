@@ -66,17 +66,18 @@ export default function ExcelTab() {
 
     const loadRules = () => {
       const saved = localStorage.getItem('ddl_generator_global_rules');
+      console.log('📥 ExcelTab 从 localStorage 读取规则:', saved);
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          console.log('加载规则数量:', parsed.length);
-          console.log('第一个规则:', parsed[0]);
+          console.log('✅ ExcelTab 解析规则数量:', parsed.length);
+          console.log('✅ ExcelTab 解析规则详情:', JSON.stringify(parsed, null, 2));
           setGlobalRules(parsed);
         } catch (e) {
-          console.error('Failed to load rules:', e);
+          console.error('❌ ExcelTab 解析规则失败:', e);
         }
       } else {
-        console.log('localStorage 中没有规则，将使用默认规则');
+        console.log('ℹ️ ExcelTab localStorage 中没有规则');
       }
     };
 
@@ -1221,19 +1222,21 @@ etlField + '\n' +
                         // 点击生成按钮时，重新加载规则管理器的规则
                         console.log('=== 生成 DWD：重新检测规则管理器 ===');
                         const savedRules = localStorage.getItem('ddl_generator_global_rules');
+                        console.log('📥 localStorage 中的规则:', savedRules);
                         if (savedRules) {
                           try {
                             const parsed = JSON.parse(savedRules);
-                            console.log('从 localStorage 重新加载规则，数量:', parsed.length);
-                            console.log('第一个规则:', parsed[0]);
+                            console.log('✅ 从 localStorage 重新加载规则，数量:', parsed.length);
+                            console.log('✅ 规则详情:', JSON.stringify(parsed, null, 2));
                             setGlobalRules(parsed);
                             
                             // 稍微延迟确保状态更新后再生成 DWD
                             setTimeout(() => {
+                              console.log('🔄 开始生成 DWD，当前规则数量:', globalRules.length);
                               generateDWDSQL(codeToNameFieldsRef.current);
                             }, 100);
                           } catch (e) {
-                            console.error('重新加载规则失败:', e);
+                            console.error('❌ 重新加载规则失败:', e);
                             // 即使加载失败，也尝试生成 DWD
                             generateDWDSQL(codeToNameFieldsRef.current);
                           }
