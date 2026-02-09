@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import ExcelTab from '@/components/ExcelTab';
 import CodeToNameConfig from '@/components/CodeToNameConfig';
+import AlterTab from '@/components/AlterTab';
 import { useToast } from '@/hooks/use-toast';
 
 interface GlobalRule {
@@ -142,7 +143,7 @@ function KeywordInput({
 export default function Home() {
   const { success, error: toastError, warning } = useToast();
   
-  const [activeTab, setActiveTab] = useState('excel');  // 'excel' | 'generator' | 'rules' | 'codeToName'
+  const [activeTab, setActiveTab] = useState('excel');  // 'excel' | 'generator' | 'alter' | 'rules' | 'codeToName'
   const [sqlInput, setSqlInput] = useState('');
   const [ddlOutput, setDdlOutput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -658,6 +659,16 @@ export default function Home() {
             DDL生成器
           </button>
           <button
+            onClick={() => setActiveTab('alter')}
+            className={`px-6 py-3 font-medium rounded-t-lg transition-all ${
+              activeTab === 'alter'
+                ? 'bg-blue-600 text-white border-t border-l border-r border-blue-600'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            ALTER生成器
+          </button>
+          <button
             onClick={() => setActiveTab('rules')}
             className={`px-6 py-3 font-medium rounded-t-lg transition-all ${
               activeTab === 'rules'
@@ -759,6 +770,11 @@ export default function Home() {
                 />
               </div>
             </div>
+        </div>
+
+        {/* ALTER生成器标签页 */}
+        <div style={{ display: activeTab === 'alter' ? 'block' : 'none' }}>
+          <AlterTab globalRules={globalRules} />
         </div>
 
         {/* 规则管理器标签页 */}

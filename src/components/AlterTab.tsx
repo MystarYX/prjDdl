@@ -1,0 +1,343 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useToast } from '@/hooks/use-toast';
+
+interface GlobalRule {
+  id: string;
+  keywords: string[];
+  matchType: 'contains' | 'equals' | 'prefix' | 'suffix';
+  targetField: 'name' | 'comment';
+  targetDatabases: string[];
+  dataTypes: Record<string, string>;
+  typeParams: Record<string, { precision?: number; scale?: number; length?: number; }>;
+  priority: number;
+}
+
+interface Field {
+  name: string;
+  comment: string;
+}
+
+const DB_LABELS = {
+  spark: 'Spark SQL',
+  mysql: 'MySQL',
+  starrocks: 'StarRocks'
+};
+
+// 默认类型
+const DEFAULT_TYPES = {
+  spark: 'STRING',
+  mysql: 'VARCHAR(256)',
+  starrocks: 'VARCHAR(256)'
+};
+
+// 从规则中推断字段类型
+const inferFieldType = (
+  fieldName: string,
+  comment: string,
+  rules: GlobalRule[],
+  databaseType: string
+): string => {
+  // 按优先级排序规则
+  const sortedRules = [...rules].sort((a, b) => a.priority - b.priority);
+
+  // 遍历规则
+  for (const rule of sortedRules) {
+    // 检查规则是否适用于当前数据库类型
+    if (!rule.targetDatabases.includes(databaseType)) {
+      continue;
+    }
+
+    // 获取目标字段的值
+    const targetValue = rule.targetField === 'name' ? fieldName : comment;
+    if (!targetValue) continue;
+
+    // 检查匹配
+    let matched = false;
+    for (const keyword of rule.keywords) {
+      const upperTarget = targetValue.toUpperCase();
+      const upperKeyword = keyword.toUpperCase();
+
+      switch (rule.matchType) {
+        case 'contains':
+          if (upperTarget.includes(upperKeyword)) {
+            matched = true;
+          }
+          break;
+        case 'equals':
+          if (upperTarget === upperKeyword) {
+            matched = true;
+          }
+          break;
+        case 'prefix':
+          if (upperTarget.startsWith(upperKeyword)) {
+            matched = true;
+          }
+          break;
+        case 'suffix':
+          if (upperTarget.endsWith(upperKeyword)) {
+            matched = true;
+          }
+          break;
+      }
+
+      if (matched) break;
+    }
+
+    if (matched) {
+      // 获取基础类型
+      const baseType = rule.dataTypes[databaseType] || rule.dataTypes['spark'];
+      if (!baseType) continue;
+
+      // 获取类型参数
+      const params = rule.typeParams[databaseType] || {};
+      const upper = baseType.toUpperCase();
+
+      // 根据参数构建完整类型字符串
+      if (params.precision !== undefined && params.scale !== undefined &&
+          (upper.includes('DECIMAL') || upper.includes('NUMERIC'))) {
+        return `${baseType}(${params.precision}, ${params.scale})`;
+      } else if (params.length !== undefined &&
+                 (upper.includes('VARCHAR') || upper.includes('CHAR'))) {
+        return `${baseType}(${params.length})`;
+      } else if (params.precision !== undefined &&
+                 (upper.includes('FLOAT') || upper.includes('DOUBLE'))) {
+        return `${baseType}(${params.precision})`;
+      }
+
+      return baseType;
+    }
+  }
+
+  // 未匹配到规则，返回默认类型
+  return DEFAULT_TYPES[databaseType as keyof typeof DEFAULT_TYPES];
+};
+
+// 生成 ALTER TABLE 语句
+const generateAlterTable = (
+  tableName: string,
+  fields: Field[],
+  databaseType: string,
+  rules: GlobalRule[]
+): string => {
+  if (fields.length === 0) {
+    return '-- 请至少添加一个字段';
+  }
+
+  // 如果表名为空，使用占位符
+  const finalTableName = tableName.trim() || '表名';
+
+  // 为每个字段推断类型
+  const fieldDefinitions = fields.map(field => {
+    const dataType = inferFieldType(field.name, field.comment, rules, databaseType);
+    return { ...field, dataType };
+  });
+
+  switch (databaseType) {
+    case 'spark':
+      // Spark SQL: alter table xxx add columns (col1 STRING COMMENT 'xxx', ...)
+      const sparkFields = fieldDefinitions.map(
+        f => `    ${f.name}${' '.repeat(Math.max(12 - f.name.length, 1))}${f.dataType}${' '.repeat(Math.max(20 - f.dataType.length, 1))}COMMENT '${f.comment}'`
+      );
+      return `alter table ${finalTableName} add columns(\n${sparkFields.join(',\n')}\n);`;
+
+    case 'mysql':
+      // MySQL: ALTER TABLE xxx ADD COLUMN col1 VARCHAR(256) COMMENT 'xxx', ...
+      const mysqlFields = fieldDefinitions.map(
+        f => `ADD COLUMN ${f.name} ${f.dataType}\t\tCOMMENT '${f.comment}'`
+      );
+      return `ALTER TABLE ${finalTableName}\n${mysqlFields.join(',\n')};`;
+
+    case 'starrocks':
+      // StarRocks: ALTER TABLE xxx ADD COLUMN col1 VARCHAR(256) comment 'xxx', ...
+      const srFields = fieldDefinitions.map(
+        f => `ADD COLUMN ${f.name} ${f.dataType} comment '${f.comment}'`
+      );
+      return `ALTER TABLE ${finalTableName}\n${srFields.join(',\n')};`;
+
+    default:
+      return '-- 不支持的数据库类型';
+  }
+};
+
+interface AlterTabProps {
+  globalRules: GlobalRule[];
+}
+
+export default function AlterTab({ globalRules }: AlterTabProps) {
+  const { success, error: toastError, warning } = useToast();
+
+  const [selectedDbType, setSelectedDbType] = useState('spark');
+  const [tableName, setTableName] = useState('');
+  const [fields, setFields] = useState<Field[]>([
+    { name: 'col1', comment: '字段1' },
+    { name: 'col2', comment: '字段2' },
+    { name: 'col3', comment: '字段3' }
+  ]);
+  const [alterOutput, setAlterOutput] = useState('');
+
+  // 当输入变化时自动生成
+  useEffect(() => {
+    const output = generateAlterTable(tableName, fields, selectedDbType, globalRules);
+    setAlterOutput(output);
+  }, [tableName, fields, selectedDbType, globalRules]);
+
+  const handleAddField = () => {
+    const newField: Field = {
+      name: `col${fields.length + 1}`,
+      comment: `字段${fields.length + 1}`
+    };
+    setFields([...fields, newField]);
+  };
+
+  const handleRemoveField = (index: number) => {
+    if (fields.length <= 1) {
+      warning('至少保留一个字段');
+      return;
+    }
+    setFields(fields.filter((_, i) => i !== index));
+  };
+
+  const handleFieldChange = (index: number, field: 'name' | 'comment', value: string) => {
+    const newFields = [...fields];
+    newFields[index][field] = value;
+    setFields(newFields);
+  };
+
+  const handleCopy = () => {
+    if (!alterOutput || alterOutput.startsWith('--')) {
+      warning('没有内容可复制');
+      return;
+    }
+    navigator.clipboard.writeText(alterOutput);
+    success('ALTER 语句已复制到剪贴板');
+  };
+
+  const handleReset = () => {
+    setTableName('');
+    setFields([
+      { name: 'col1', comment: '字段1' },
+      { name: 'col2', comment: '字段2' },
+      { name: 'col3', comment: '字段3' }
+    ]);
+    success('已重置为默认值');
+  };
+
+  return (
+    <div>
+      {/* 数据库类型选择 */}
+      <div className="bg-white rounded-xl p-6 mb-6 shadow-sm">
+        <h3 className="font-semibold text-gray-800 mb-4">目标数据库类型</h3>
+        <div className="flex flex-wrap gap-3">
+          {Object.entries(DB_LABELS).map(([value, label]) => (
+            <label
+              key={value}
+              className={`flex items-center gap-2 px-4 py-2 border rounded-lg cursor-pointer transition-colors ${
+                selectedDbType === value
+                  ? 'bg-blue-50 border-blue-600 text-blue-600'
+                  : 'hover:bg-gray-50'
+              }`}
+            >
+              <input
+                type="radio"
+                name="databaseType"
+                value={value}
+                checked={selectedDbType === value}
+                onChange={(e) => setSelectedDbType(e.target.value)}
+                className="rounded"
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* 表名输入 */}
+      <div className="bg-white rounded-xl p-6 mb-6 shadow-sm">
+        <h3 className="font-semibold text-gray-800 mb-4">表名</h3>
+        <input
+          type="text"
+          value={tableName}
+          onChange={(e) => setTableName(e.target.value)}
+          placeholder="输入表名（可选，为空时使用占位符）"
+          className="w-full px-4 py-3 border rounded-lg font-mono text-sm"
+        />
+      </div>
+
+      {/* 字段列表 */}
+      <div className="bg-white rounded-xl p-6 mb-6 shadow-sm">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-semibold text-gray-800">新增字段</h3>
+          <button
+            onClick={handleAddField}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 transition-colors"
+          >
+            + 添加字段
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          {fields.map((field, index) => (
+            <div key={index} className="flex gap-3 items-center">
+              <div className="flex-1">
+                <input
+                  type="text"
+                  value={field.name}
+                  onChange={(e) => handleFieldChange(index, 'name', e.target.value)}
+                  placeholder="字段名"
+                  className="w-full px-3 py-2 border rounded text-sm font-mono"
+                />
+              </div>
+              <div className="flex-1">
+                <input
+                  type="text"
+                  value={field.comment}
+                  onChange={(e) => handleFieldChange(index, 'comment', e.target.value)}
+                  placeholder="字段注释"
+                  className="w-full px-3 py-2 border rounded text-sm"
+                />
+              </div>
+              <button
+                onClick={() => handleRemoveField(index)}
+                className="px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                title="删除字段"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 输出区域 */}
+      <div className="bg-white rounded-xl p-6 shadow-sm">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-semibold text-gray-800">
+            {DB_LABELS[selectedDbType as keyof typeof DB_LABELS]} ALTER TABLE 语句
+          </h3>
+          <div className="flex gap-2">
+            <button
+              onClick={handleReset}
+              className="px-4 py-2 bg-gray-600 text-white rounded-lg text-sm hover:bg-gray-700 transition-colors"
+            >
+              重置
+            </button>
+            <button
+              onClick={handleCopy}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 transition-colors"
+            >
+              复制
+            </button>
+          </div>
+        </div>
+        <textarea
+          value={alterOutput}
+          readOnly
+          placeholder="生成的 ALTER TABLE 语句将显示在这里..."
+          className="w-full h-64 p-4 border rounded-lg font-mono text-sm resize-none bg-gray-50"
+        />
+      </div>
+    </div>
+  );
+}
