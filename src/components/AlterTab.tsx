@@ -14,11 +14,6 @@ interface GlobalRule {
   priority: number;
 }
 
-interface Field {
-  name: string;
-  comment: string;
-}
-
 const DB_LABELS = {
   spark: 'Spark SQL',
   mysql: 'MySQL',
@@ -30,6 +25,50 @@ const DEFAULT_TYPES = {
   spark: 'STRING',
   mysql: 'VARCHAR(256)',
   starrocks: 'VARCHAR(256)'
+};
+
+// 解析字段文本
+const parseFields = (text: string): Array<{ name: string; comment: string }> => {
+  const fields: Array<{ name: string; comment: string }> = [];
+  const lines = text.trim().split('\n');
+
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+    if (!trimmedLine || trimmedLine.startsWith('--')) continue;
+
+    // 匹配格式: ,trl.splr_trcl_sers AS splr_trcl_sers --系列供应商
+    // 或者: splr_trcl_sers --系列供应商
+    // 或者: splr_trcl_sers COMMENT '系列供应商'
+
+    // 先找 AS 关键字
+    const asMatch = trimmedLine.match(/AS\s+([\w_]+)/i);
+    // 找 -- 注释
+    const commentMatch = trimmedLine.match(/--\s*(.+)$/);
+
+    let fieldName = '';
+    let comment = '';
+
+    if (asMatch) {
+      // 有 AS 的情况，取 AS 后面的作为字段名
+      fieldName = asMatch[1];
+    } else {
+      // 没有 AS，尝试找第一个字段名（可能是逗号开头的）
+      const firstWordMatch = trimmedLine.match(/^,?\s*([\w_]+)/);
+      if (firstWordMatch) {
+        fieldName = firstWordMatch[1];
+      }
+    }
+
+    if (commentMatch) {
+      comment = commentMatch[1].trim();
+    }
+
+    if (fieldName) {
+      fields.push({ name: fieldName, comment: comment || '' });
+    }
+  }
+
+  return fields;
 };
 
 // 从规则中推断字段类型
@@ -117,48 +156,55 @@ const inferFieldType = (
 // 生成 ALTER TABLE 语句
 const generateAlterTable = (
   tableName: string,
-  fields: Field[],
-  databaseType: string,
+  fieldText: string,
+  databaseTypes: string[],
   rules: GlobalRule[]
-): string => {
+): string[] => {
+  const fields = parseFields(fieldText);
+
   if (fields.length === 0) {
-    return '-- 请至少添加一个字段';
+    return databaseTypes.map(dbType => `-- ${DB_LABELS[dbType as keyof typeof DB_LABELS]}\n-- 请至少添加一个字段`);
   }
 
-  // 如果表名为空，使用占位符
-  const finalTableName = tableName.trim() || '表名';
+  const results: string[] = [];
 
-  // 为每个字段推断类型
-  const fieldDefinitions = fields.map(field => {
-    const dataType = inferFieldType(field.name, field.comment, rules, databaseType);
-    return { ...field, dataType };
-  });
+  for (const databaseType of databaseTypes) {
+    const finalTableName = tableName.trim() || '表名';
 
-  switch (databaseType) {
-    case 'spark':
-      // Spark SQL: alter table xxx add columns (col1 STRING COMMENT 'xxx', ...)
-      const sparkFields = fieldDefinitions.map(
-        f => `    ${f.name}${' '.repeat(Math.max(12 - f.name.length, 1))}${f.dataType}${' '.repeat(Math.max(20 - f.dataType.length, 1))}COMMENT '${f.comment}'`
-      );
-      return `alter table ${finalTableName} add columns(\n${sparkFields.join(',\n')}\n);`;
+    // 为每个字段推断类型
+    const fieldDefinitions = fields.map(field => {
+      const dataType = inferFieldType(field.name, field.comment, rules, databaseType);
+      return { ...field, dataType };
+    });
 
-    case 'mysql':
-      // MySQL: ALTER TABLE xxx ADD COLUMN col1 VARCHAR(256) COMMENT 'xxx', ...
-      const mysqlFields = fieldDefinitions.map(
-        f => `ADD COLUMN ${f.name} ${f.dataType}\t\tCOMMENT '${f.comment}'`
-      );
-      return `ALTER TABLE ${finalTableName}\n${mysqlFields.join(',\n')};`;
+    switch (databaseType) {
+      case 'spark':
+        // Spark SQL: alter table xxx add columns (col1 STRING COMMENT 'xxx', ...)
+        const sparkFields = fieldDefinitions.map(
+          f => `${f.name}${' '.repeat(Math.max(30 - f.name.length, 1))}${f.dataType}${' '.repeat(Math.max(20 - f.dataType.length, 1))}COMMENT '${f.comment}'`
+        );
+        results.push(`-- ${DB_LABELS[databaseType as keyof typeof DB_LABELS]}\nalter table ${finalTableName} add columns(\n${sparkFields.join(',\n')}\n);`);
 
-    case 'starrocks':
-      // StarRocks: ALTER TABLE xxx ADD COLUMN col1 VARCHAR(256) comment 'xxx', ...
-      const srFields = fieldDefinitions.map(
-        f => `ADD COLUMN ${f.name} ${f.dataType} comment '${f.comment}'`
-      );
-      return `ALTER TABLE ${finalTableName}\n${srFields.join(',\n')};`;
+      case 'mysql':
+        // MySQL: ALTER TABLE xxx ADD COLUMN col1 VARCHAR(256) COMMENT 'xxx', ...
+        const mysqlFields = fieldDefinitions.map(
+          f => `ADD COLUMN ${f.name} ${f.dataType}\t\tCOMMENT '${f.comment}'`
+        );
+        results.push(`-- ${DB_LABELS[databaseType as keyof typeof DB_LABELS]}\nALTER TABLE ${finalTableName}\n${mysqlFields.join(',\n')};`);
 
-    default:
-      return '-- 不支持的数据库类型';
+      case 'starrocks':
+        // StarRocks: ALTER TABLE xxx ADD COLUMN col1 VARCHAR(256) comment 'xxx', ...
+        const srFields = fieldDefinitions.map(
+          f => `ADD COLUMN ${f.name} ${f.dataType} comment '${f.comment}'`
+        );
+        results.push(`-- ${DB_LABELS[databaseType as keyof typeof DB_LABELS]}\nALTER TABLE ${finalTableName}\n${srFields.join(',\n')};`);
+
+      default:
+        results.push(`-- ${DB_LABELS[databaseType as keyof typeof DB_LABELS]}\n-- 不支持的数据库类型`);
+    }
   }
+
+  return results;
 };
 
 interface AlterTabProps {
@@ -168,42 +214,16 @@ interface AlterTabProps {
 export default function AlterTab({ globalRules }: AlterTabProps) {
   const { success, error: toastError, warning } = useToast();
 
-  const [selectedDbType, setSelectedDbType] = useState('spark');
+  const [selectedDbTypes, setSelectedDbTypes] = useState<string[]>(['spark']);
   const [tableName, setTableName] = useState('');
-  const [fields, setFields] = useState<Field[]>([
-    { name: 'col1', comment: '字段1' },
-    { name: 'col2', comment: '字段2' },
-    { name: 'col3', comment: '字段3' }
-  ]);
+  const [fieldText, setFieldText] = useState('');
   const [alterOutput, setAlterOutput] = useState('');
 
   // 当输入变化时自动生成
   useEffect(() => {
-    const output = generateAlterTable(tableName, fields, selectedDbType, globalRules);
-    setAlterOutput(output);
-  }, [tableName, fields, selectedDbType, globalRules]);
-
-  const handleAddField = () => {
-    const newField: Field = {
-      name: `col${fields.length + 1}`,
-      comment: `字段${fields.length + 1}`
-    };
-    setFields([...fields, newField]);
-  };
-
-  const handleRemoveField = (index: number) => {
-    if (fields.length <= 1) {
-      warning('至少保留一个字段');
-      return;
-    }
-    setFields(fields.filter((_, i) => i !== index));
-  };
-
-  const handleFieldChange = (index: number, field: 'name' | 'comment', value: string) => {
-    const newFields = [...fields];
-    newFields[index][field] = value;
-    setFields(newFields);
-  };
+    const outputs = generateAlterTable(tableName, fieldText, selectedDbTypes, globalRules);
+    setAlterOutput(outputs.join('\n\n'));
+  }, [tableName, fieldText, selectedDbTypes, globalRules]);
 
   const handleCopy = () => {
     if (!alterOutput || alterOutput.startsWith('--')) {
@@ -216,35 +236,42 @@ export default function AlterTab({ globalRules }: AlterTabProps) {
 
   const handleReset = () => {
     setTableName('');
-    setFields([
-      { name: 'col1', comment: '字段1' },
-      { name: 'col2', comment: '字段2' },
-      { name: 'col3', comment: '字段3' }
-    ]);
+    setFieldText('');
     success('已重置为默认值');
+  };
+
+  const handleDbTypeChange = (dbType: string, checked: boolean) => {
+    if (checked) {
+      setSelectedDbTypes([...selectedDbTypes, dbType]);
+    } else {
+      if (selectedDbTypes.length === 1) {
+        warning('至少选择一种数据库类型');
+        return;
+      }
+      setSelectedDbTypes(selectedDbTypes.filter(t => t !== dbType));
+    }
   };
 
   return (
     <div>
       {/* 数据库类型选择 */}
       <div className="bg-white rounded-xl p-6 mb-6 shadow-sm">
-        <h3 className="font-semibold text-gray-800 mb-4">目标数据库类型</h3>
+        <h3 className="font-semibold text-gray-800 mb-4">目标数据库类型（可多选）</h3>
         <div className="flex flex-wrap gap-3">
           {Object.entries(DB_LABELS).map(([value, label]) => (
             <label
               key={value}
               className={`flex items-center gap-2 px-4 py-2 border rounded-lg cursor-pointer transition-colors ${
-                selectedDbType === value
+                selectedDbTypes.includes(value)
                   ? 'bg-blue-50 border-blue-600 text-blue-600'
                   : 'hover:bg-gray-50'
               }`}
             >
               <input
-                type="radio"
-                name="databaseType"
+                type="checkbox"
                 value={value}
-                checked={selectedDbType === value}
-                onChange={(e) => setSelectedDbType(e.target.value)}
+                checked={selectedDbTypes.includes(value)}
+                onChange={(e) => handleDbTypeChange(value, e.target.checked)}
                 className="rounded"
               />
               {label}
@@ -253,90 +280,68 @@ export default function AlterTab({ globalRules }: AlterTabProps) {
         </div>
       </div>
 
-      {/* 表名输入 */}
-      <div className="bg-white rounded-xl p-6 mb-6 shadow-sm">
-        <h3 className="font-semibold text-gray-800 mb-4">表名</h3>
-        <input
-          type="text"
-          value={tableName}
-          onChange={(e) => setTableName(e.target.value)}
-          placeholder="输入表名（可选，为空时使用占位符）"
-          className="w-full px-4 py-3 border rounded-lg font-mono text-sm"
-        />
-      </div>
+      {/* 左右两列布局 */}
+      <div className="grid grid-cols-2 gap-6">
+        {/* 左侧：输入区域 */}
+        <div className="space-y-6">
+          {/* 表名输入 */}
+          <div className="bg-white rounded-xl p-6 shadow-sm">
+            <h3 className="font-semibold text-gray-800 mb-4">表名</h3>
+            <input
+              type="text"
+              value={tableName}
+              onChange={(e) => setTableName(e.target.value)}
+              placeholder="输入表名（可选，为空时使用占位符）"
+              className="w-full px-4 py-3 border rounded-lg font-mono text-sm"
+            />
+          </div>
 
-      {/* 字段列表 */}
-      <div className="bg-white rounded-xl p-6 mb-6 shadow-sm">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="font-semibold text-gray-800">新增字段</h3>
-          <button
-            onClick={handleAddField}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 transition-colors"
-          >
-            + 添加字段
-          </button>
-        </div>
+          {/* 字段输入 */}
+          <div className="bg-white rounded-xl p-6 shadow-sm">
+            <h3 className="font-semibold text-gray-800 mb-4">新增字段（支持 AS 别名、-- 注释）</h3>
+            <textarea
+              value={fieldText}
+              onChange={(e) => setFieldText(e.target.value)}
+              placeholder="示例格式：
+,trl.splr_trcl_sers AS splr_trcl_sers --系列供应商
+,trl.splr_trcl_sers_name AS splr_trcl_sers_name --系列供应商名称
 
-        <div className="space-y-3">
-          {fields.map((field, index) => (
-            <div key={index} className="flex gap-3 items-center">
-              <div className="flex-1">
-                <input
-                  type="text"
-                  value={field.name}
-                  onChange={(e) => handleFieldChange(index, 'name', e.target.value)}
-                  placeholder="字段名"
-                  className="w-full px-3 py-2 border rounded text-sm font-mono"
-                />
-              </div>
-              <div className="flex-1">
-                <input
-                  type="text"
-                  value={field.comment}
-                  onChange={(e) => handleFieldChange(index, 'comment', e.target.value)}
-                  placeholder="字段注释"
-                  className="w-full px-3 py-2 border rounded text-sm"
-                />
-              </div>
-              <button
-                onClick={() => handleRemoveField(index)}
-                className="px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-                title="删除字段"
-              >
-                ×
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* 输出区域 */}
-      <div className="bg-white rounded-xl p-6 shadow-sm">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="font-semibold text-gray-800">
-            {DB_LABELS[selectedDbType as keyof typeof DB_LABELS]} ALTER TABLE 语句
-          </h3>
-          <div className="flex gap-2">
-            <button
-              onClick={handleReset}
-              className="px-4 py-2 bg-gray-600 text-white rounded-lg text-sm hover:bg-gray-700 transition-colors"
-            >
-              重置
-            </button>
-            <button
-              onClick={handleCopy}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 transition-colors"
-            >
-              复制
-            </button>
+或者：
+splr_trcl_sers --系列供应商
+splr_trcl_sers_name --系列供应商名称"
+              className="w-full h-96 p-4 border rounded-lg font-mono text-sm resize-none"
+            />
           </div>
         </div>
-        <textarea
-          value={alterOutput}
-          readOnly
-          placeholder="生成的 ALTER TABLE 语句将显示在这里..."
-          className="w-full h-64 p-4 border rounded-lg font-mono text-sm resize-none bg-gray-50"
-        />
+
+        {/* 右侧：输出区域 */}
+        <div className="bg-white rounded-xl p-6 shadow-sm">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-semibold text-gray-800">
+              {selectedDbTypes.length > 1 ? 'ALTER TABLE 语句' : `${DB_LABELS[selectedDbTypes[0] as keyof typeof DB_LABELS]} ALTER TABLE 语句`}
+            </h3>
+            <div className="flex gap-2">
+              <button
+                onClick={handleReset}
+                className="px-4 py-2 bg-gray-600 text-white rounded-lg text-sm hover:bg-gray-700 transition-colors"
+              >
+                重置
+              </button>
+              <button
+                onClick={handleCopy}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 transition-colors"
+              >
+                复制
+              </button>
+            </div>
+          </div>
+          <textarea
+            value={alterOutput}
+            readOnly
+            placeholder="生成的 ALTER TABLE 语句将显示在这里..."
+            className="w-full h-[448px] p-4 border rounded-lg font-mono text-sm resize-none bg-gray-50"
+          />
+        </div>
       </div>
     </div>
   );
