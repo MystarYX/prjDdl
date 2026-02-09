@@ -155,7 +155,7 @@ const inferFieldType = (
 
 // 生成 ALTER TABLE 语句
 const generateAlterTable = (
-  tableName: string,
+  tableNames: Record<string, string>,
   fieldText: string,
   databaseTypes: string[],
   rules: GlobalRule[]
@@ -169,7 +169,7 @@ const generateAlterTable = (
   const results: string[] = [];
 
   for (const databaseType of databaseTypes) {
-    const finalTableName = tableName.trim() || '表名';
+    const finalTableName = (tableNames[databaseType] || '').trim() || '表名';
 
     // 为每个字段推断类型
     const fieldDefinitions = fields.map(field => {
@@ -219,15 +219,19 @@ export default function AlterTab({ globalRules }: AlterTabProps) {
   const { success, error: toastError, warning } = useToast();
 
   const [selectedDbTypes, setSelectedDbTypes] = useState<string[]>(['spark']);
-  const [tableName, setTableName] = useState('');
+  const [tableNames, setTableNames] = useState<Record<string, string>>({
+    spark: '',
+    mysql: '',
+    starrocks: ''
+  });
   const [fieldText, setFieldText] = useState('');
   const [alterOutput, setAlterOutput] = useState('');
 
   // 当输入变化时自动生成
   useEffect(() => {
-    const outputs = generateAlterTable(tableName, fieldText, selectedDbTypes, globalRules);
+    const outputs = generateAlterTable(tableNames, fieldText, selectedDbTypes, globalRules);
     setAlterOutput(outputs.join('\n\n'));
-  }, [tableName, fieldText, selectedDbTypes, globalRules]);
+  }, [tableNames, fieldText, selectedDbTypes, globalRules]);
 
   const handleCopy = () => {
     if (!alterOutput.trim()) {
@@ -247,7 +251,11 @@ export default function AlterTab({ globalRules }: AlterTabProps) {
   };
 
   const handleReset = () => {
-    setTableName('');
+    setTableNames({
+      spark: '',
+      mysql: '',
+      starrocks: ''
+    });
     setFieldText('');
     success('已重置为默认值');
   };
@@ -262,6 +270,13 @@ export default function AlterTab({ globalRules }: AlterTabProps) {
       }
       setSelectedDbTypes(selectedDbTypes.filter(t => t !== dbType));
     }
+  };
+
+  const handleTableNameChange = (dbType: string, value: string) => {
+    setTableNames(prev => ({
+      ...prev,
+      [dbType]: value
+    }));
   };
 
   return (
@@ -296,17 +311,21 @@ export default function AlterTab({ globalRules }: AlterTabProps) {
       <div className="grid grid-cols-2 gap-6">
         {/* 左侧：输入区域 */}
         <div className="space-y-6">
-          {/* 表名输入 */}
-          <div className="bg-white rounded-xl p-6 shadow-sm">
-            <h3 className="font-semibold text-gray-800 mb-4">表名</h3>
-            <input
-              type="text"
-              value={tableName}
-              onChange={(e) => setTableName(e.target.value)}
-              placeholder="输入表名（可选，为空时使用占位符）"
-              className="w-full px-4 py-3 border rounded-lg font-mono text-sm"
-            />
-          </div>
+          {/* 表名输入 - 根据选择的数据库类型动态显示 */}
+          {selectedDbTypes.map(dbType => (
+            <div key={dbType} className="bg-white rounded-xl p-6 shadow-sm">
+              <h3 className="font-semibold text-gray-800 mb-4">
+                {DB_LABELS[dbType as keyof typeof DB_LABELS]} 表名
+              </h3>
+              <input
+                type="text"
+                value={tableNames[dbType] || ''}
+                onChange={(e) => handleTableNameChange(dbType, e.target.value)}
+                placeholder={`输入 ${DB_LABELS[dbType as keyof typeof DB_LABELS]} 表名（可选）`}
+                className="w-full px-4 py-3 border rounded-lg font-mono text-sm"
+              />
+            </div>
+          ))}
 
           {/* 字段输入 */}
           <div className="bg-white rounded-xl p-6 shadow-sm">
@@ -330,7 +349,7 @@ splr_trcl_sers_name --系列供应商名称"
         <div className="bg-white rounded-xl p-6 shadow-sm">
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-semibold text-gray-800">
-              {selectedDbTypes.length > 1 ? 'ALTER TABLE 语句' : `${DB_LABELS[selectedDbTypes[0] as keyof typeof DB_LABELS]} ALTER TABLE 语句`}
+              ALTER TABLE 语句
             </h3>
             <div className="flex gap-2">
               <button
