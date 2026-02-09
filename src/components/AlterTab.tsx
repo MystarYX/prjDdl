@@ -313,17 +313,19 @@ export default function AlterTab({ globalRules }: AlterTabProps) {
         <div className="space-y-6">
           {/* 表名输入 - 根据选择的数据库类型动态显示 */}
           {selectedDbTypes.map(dbType => (
-            <div key={dbType} className="bg-white rounded-xl p-6 shadow-sm">
-              <h3 className="font-semibold text-gray-800 mb-4">
-                {DB_LABELS[dbType as keyof typeof DB_LABELS]} 表名
-              </h3>
-              <input
-                type="text"
-                value={tableNames[dbType] || ''}
-                onChange={(e) => handleTableNameChange(dbType, e.target.value)}
-                placeholder={`输入 ${DB_LABELS[dbType as keyof typeof DB_LABELS]} 表名（可选）`}
-                className="w-full px-4 py-3 border rounded-lg font-mono text-sm"
-              />
+            <div key={dbType} className="bg-white rounded-xl p-4 shadow-sm">
+              <div className="flex items-center gap-3">
+                <h3 className="font-semibold text-gray-800 whitespace-nowrap min-w-[100px]">
+                  {DB_LABELS[dbType as keyof typeof DB_LABELS]} 表名
+                </h3>
+                <input
+                  type="text"
+                  value={tableNames[dbType] || ''}
+                  onChange={(e) => handleTableNameChange(dbType, e.target.value)}
+                  placeholder={`输入 ${DB_LABELS[dbType as keyof typeof DB_LABELS]} 表名（可选）`}
+                  className="flex-1 px-4 py-2 border rounded-lg font-mono text-sm"
+                />
+              </div>
             </div>
           ))}
 
