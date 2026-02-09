@@ -184,6 +184,7 @@ const generateAlterTable = (
           f => `${f.name}${' '.repeat(Math.max(30 - f.name.length, 1))}${f.dataType}${' '.repeat(Math.max(20 - f.dataType.length, 1))}COMMENT '${f.comment}'`
         );
         results.push(`-- ${DB_LABELS[databaseType as keyof typeof DB_LABELS]}\nalter table ${finalTableName} add columns(\n${sparkFields.join(',\n')}\n);`);
+        break;
 
       case 'mysql':
         // MySQL: ALTER TABLE xxx ADD COLUMN col1 VARCHAR(256) COMMENT 'xxx', ...
@@ -191,6 +192,7 @@ const generateAlterTable = (
           f => `ADD COLUMN ${f.name} ${f.dataType}\t\tCOMMENT '${f.comment}'`
         );
         results.push(`-- ${DB_LABELS[databaseType as keyof typeof DB_LABELS]}\nALTER TABLE ${finalTableName}\n${mysqlFields.join(',\n')};`);
+        break;
 
       case 'starrocks':
         // StarRocks: ALTER TABLE xxx ADD COLUMN col1 VARCHAR(256) comment 'xxx', ...
@@ -198,9 +200,11 @@ const generateAlterTable = (
           f => `ADD COLUMN ${f.name} ${f.dataType} comment '${f.comment}'`
         );
         results.push(`-- ${DB_LABELS[databaseType as keyof typeof DB_LABELS]}\nALTER TABLE ${finalTableName}\n${srFields.join(',\n')};`);
+        break;
 
       default:
         results.push(`-- ${DB_LABELS[databaseType as keyof typeof DB_LABELS]}\n-- 不支持的数据库类型`);
+        break;
     }
   }
 
@@ -226,10 +230,18 @@ export default function AlterTab({ globalRules }: AlterTabProps) {
   }, [tableName, fieldText, selectedDbTypes, globalRules]);
 
   const handleCopy = () => {
-    if (!alterOutput || alterOutput.startsWith('--')) {
+    if (!alterOutput.trim()) {
       warning('没有内容可复制');
       return;
     }
+
+    // 检查是否包含实际的 SQL 语句（包含 alter table 或 ALTER TABLE）
+    const hasValidSQL = /alter\s+table|ALTER\s+TABLE/i.test(alterOutput);
+    if (!hasValidSQL) {
+      warning('没有内容可复制');
+      return;
+    }
+
     navigator.clipboard.writeText(alterOutput);
     success('ALTER 语句已复制到剪贴板');
   };
