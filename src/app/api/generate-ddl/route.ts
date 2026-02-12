@@ -4,6 +4,7 @@ interface FieldInfo {
   name: string;
   alias?: string;
   comment: string;
+  originalType?: string; // 原始类型定义（如果有）
 }
 
 interface InferenceRule {
@@ -433,15 +434,95 @@ function extractCommentMap(lines: string[]): Record<string, string> {
   return commentMap;
 }
 
+// 解析单个字段定义（包含类型和注释）
+function parseFieldDefinition(line: string): FieldInfo | null {
+  const trimmedLine = line.trim();
+  if (!trimmedLine) return null;
+
+  // 检查是否包含注释（支持 -- 和 COMMENT 两种格式）
+  let comment = '';
+  let withoutComment = trimmedLine;
+
+  // 格式1: -- 注释
+  const lineCommentMatch = trimmedLine.match(/\s+--\s*(.+)$/);
+  if (lineCommentMatch) {
+    comment = lineCommentMatch[1].trim();
+    withoutComment = trimmedLine.substring(0, lineCommentMatch.index).trim();
+  } else {
+    // 格式2: COMMENT '注释'
+    const commentMatch = trimmedLine.match(/\s+COMMENT\s+['"]([^'"]*)['"]$/i);
+    if (commentMatch) {
+      comment = commentMatch[1].trim();
+      withoutComment = trimmedLine.substring(0, commentMatch.index).trim();
+    }
+  }
+
+  // 按空格分割，提取字段名
+  const parts = withoutComment.split(/\s+/);
+  if (parts.length === 0) return null;
+
+  const fieldName = parts[0].trim();
+  if (!fieldName) return null;
+
+  // 提取类型（如果有）
+  let originalType: string | undefined;
+  if (parts.length >= 2) {
+    // 查找类型部分（字段名之后到注释之前）
+    const typeParts = [];
+    for (let i = 1; i < parts.length; i++) {
+      typeParts.push(parts[i]);
+    }
+    originalType = typeParts.join(' ');
+  }
+
+  return {
+    name: fieldName,
+    comment: comment,
+    originalType: originalType
+  };
+}
+
+// 检查字段是否包含类型定义
+function hasTypeDefinition(expr: string): boolean {
+  const trimmed = expr.trim();
+  // 常见的SQL类型关键字
+  const typeKeywords = [
+    'STRING', 'VARCHAR', 'CHAR', 'DECIMAL', 'NUMERIC', 'INT', 'INTEGER', 'BIGINT',
+    'SMALLINT', 'TINYINT', 'FLOAT', 'DOUBLE', 'BOOLEAN', 'DATE', 'DATETIME',
+    'TIMESTAMP', 'TIME', 'TEXT', 'BLOB', 'JSON', 'ARRAY', 'MAP', 'STRUCT'
+  ];
+  const upperExpr = trimmed.toUpperCase();
+  return typeKeywords.some(type => upperExpr.includes(type));
+}
+
 function tryParseFieldList(sql: string): FieldInfo[] {
   const cleanSQL = sql.replace(/--.*?(,)?$/gm, '$1').replace(/\/\*[\s\S]*?\*\//g, '').trim();
-
   const commentMap = extractCommentMap(sql.split('\n'));
   const fieldExpressions = splitFields(cleanSQL);
 
-  return fieldExpressions
-    .map(expr => parseFieldExpression(expr, commentMap))
-    .filter((f): f is FieldInfo => f !== null);
+  const fields: FieldInfo[] = [];
+
+  for (const expr of fieldExpressions) {
+    const trimmedExpr = expr.trim();
+    if (!trimmedExpr) continue;
+
+    // 检查是否包含类型定义
+    if (hasTypeDefinition(expr)) {
+      // 使用解析字段定义的逻辑
+      const fieldDef = parseFieldDefinition(trimmedExpr);
+      if (fieldDef) {
+        fields.push(fieldDef);
+      }
+    } else {
+      // 使用普通的字段表达式解析逻辑
+      const field = parseFieldExpression(trimmedExpr, commentMap);
+      if (field) {
+        fields.push(field);
+      }
+    }
+  }
+
+  return fields;
 }
 
 function parseSelectClause(selectClause: string): FieldInfo[] {
@@ -830,11 +911,19 @@ function generateDDL(fields: FieldInfo[], customRules: Record<string, InferenceR
   // 调整字段：优先使用别名作为字段名
   const adjustedFields = fields.map(field => {
     const fieldName = field.alias || field.name;
-    const typeInfo = inferFieldType(fieldName, field.comment, dbRules, databaseType);
-    const mappedType = mapDataType(typeInfo, databaseType);
+    
+    // 如果字段有原始类型定义，使用原始类型；否则使用推断的类型
+    let fieldType: string;
+    if (field.originalType && field.originalType.trim()) {
+      fieldType = field.originalType.trim();
+    } else {
+      const typeInfo = inferFieldType(fieldName, field.comment, dbRules, databaseType);
+      fieldType = mapDataType(typeInfo, databaseType);
+    }
+    
     return {
       name: fieldName,
-      type: mappedType,
+      type: fieldType,
       comment: field.comment
     };
   });
