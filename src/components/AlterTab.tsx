@@ -183,7 +183,9 @@ const generateAlterTable = (
         const sparkFields = fieldDefinitions.map(
           f => `${f.name}${' '.repeat(Math.max(30 - f.name.length, 1))}${f.dataType}${' '.repeat(Math.max(20 - f.dataType.length, 1))}COMMENT '${f.comment}'`
         );
-        results.push(`-- ${DB_LABELS[databaseType as keyof typeof DB_LABELS]}\nalter table ${finalTableName} add columns(\n${sparkFields.join(',\n')}\n);`);
+        // 逗号前置
+        const sparkFieldsWithComma = sparkFields.map((f, i) => i === 0 ? f : `    ,${f}`);
+        results.push(`-- ${DB_LABELS[databaseType as keyof typeof DB_LABELS]}\nalter table ${finalTableName} add columns(\n${sparkFieldsWithComma.join('\n')}\n);`);
         break;
 
       case 'mysql':
@@ -191,7 +193,9 @@ const generateAlterTable = (
         const mysqlFields = fieldDefinitions.map(
           f => `ADD COLUMN ${f.name} ${f.dataType}\t\tCOMMENT '${f.comment}'`
         );
-        results.push(`-- ${DB_LABELS[databaseType as keyof typeof DB_LABELS]}\nALTER TABLE ${finalTableName}\n${mysqlFields.join(',\n')};`);
+        // 逗号前置
+        const mysqlFieldsWithComma = mysqlFields.map((f, i) => i === 0 ? f : `,${f}`);
+        results.push(`-- ${DB_LABELS[databaseType as keyof typeof DB_LABELS]}\nALTER TABLE ${finalTableName}\n${mysqlFieldsWithComma.join('\n')};`);
         break;
 
       case 'starrocks':
@@ -199,7 +203,9 @@ const generateAlterTable = (
         const srFields = fieldDefinitions.map(
           f => `ADD COLUMN ${f.name} ${f.dataType} comment '${f.comment}'`
         );
-        results.push(`-- ${DB_LABELS[databaseType as keyof typeof DB_LABELS]}\nALTER TABLE ${finalTableName}\n${srFields.join(',\n')};`);
+        // 逗号前置
+        const srFieldsWithComma = srFields.map((f, i) => i === 0 ? f : `,${f}`);
+        results.push(`-- ${DB_LABELS[databaseType as keyof typeof DB_LABELS]}\nALTER TABLE ${finalTableName}\n${srFieldsWithComma.join('\n')};`);
         break;
 
       default:
