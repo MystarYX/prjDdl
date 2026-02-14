@@ -398,6 +398,7 @@ function extractCommentMap(lines: string[]): Record<string, string> {
       // 去掉注释中的引号，避免在生成DDL时出现引号问题
       const comment = match[1].trim().replace(/[`'""]/g, '');
       const fieldPart = line.substring(0, match.index).trim();
+
       if (fieldPart) {
         // 去掉字段表达式末尾的逗号
         let normalizedKey = fieldPart.replace(/^,/, '').replace(/,$/, '').trim();
@@ -494,7 +495,19 @@ function hasTypeDefinition(expr: string): boolean {
     'TIMESTAMP', 'TIME', 'TEXT', 'BLOB', 'JSON', 'ARRAY', 'MAP', 'STRUCT'
   ];
   const upperExpr = trimmed.toUpperCase();
-  return typeKeywords.some(type => upperExpr.includes(type));
+  
+  // 使用正则表达式确保类型关键字是独立的单词，而不是函数名的一部分
+  // 例如：current_timestamp() 不应该被匹配
+  for (const type of typeKeywords) {
+    // 匹配：开头是类型，或者前面有非单词字符（空格、逗号、开括号等）
+    // 后面必须是空格、逗号或结尾
+    const regex = new RegExp(`(^|\\W)${type}($|\\W)`);
+    if (regex.test(upperExpr)) {
+      return true;
+    }
+  }
+  
+  return false;
 }
 
 function tryParseFieldList(sql: string): FieldInfo[] {
