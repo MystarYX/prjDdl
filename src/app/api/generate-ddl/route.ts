@@ -374,7 +374,7 @@ function tryParseSelectFields(sql: string): FieldInfo[] {
   const selectStart = selectIndex + 6; // 'SELECT'的长度是6
   let selectClause = sql.substring(selectStart).trim();
 
-  const stopKeywords = ['WHERE', 'GROUP BY', 'ORDER BY', 'HAVING', 'LIMIT', 'UNION'];
+  const stopKeywords = ['WHERE', 'GROUP BY', 'ORDER BY', 'HAVING', 'LIMIT', 'UNION', 'FROM'];
   for (const keyword of stopKeywords) {
     const keywordIndex = selectClause.toUpperCase().indexOf(keyword);
     if (keywordIndex !== -1) {
@@ -497,8 +497,13 @@ function hasTypeDefinition(expr: string): boolean {
 
 function tryParseFieldList(sql: string): FieldInfo[] {
   const cleanSQL = sql.replace(/--.*?(,)?$/gm, '$1').replace(/\/\*[\s\S]*?\*\//g, '').trim();
+  
+  // 过滤掉 FROM 关键字及其之后的内容
+  const fromIndex = cleanSQL.toUpperCase().indexOf(' FROM ');
+  const filteredSQL = fromIndex !== -1 ? cleanSQL.substring(0, fromIndex).trim() : cleanSQL;
+  
   const commentMap = extractCommentMap(sql.split('\n'));
-  const fieldExpressions = splitFields(cleanSQL);
+  const fieldExpressions = splitFields(filteredSQL);
 
   const fields: FieldInfo[] = [];
 
