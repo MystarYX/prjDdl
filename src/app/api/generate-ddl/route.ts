@@ -160,17 +160,19 @@ function tryParseCreateTable(sql: string): FieldInfo[] {
     // 去掉注释部分
     const withoutComment = commentMatch ? trimmedLine.substring(0, commentMatch.index).trim() : trimmedLine;
 
-    // 分割字段名和类型
-    const firstSpaceIndex = withoutComment.indexOf(' ');
-    if (firstSpaceIndex === -1) continue;
+    // 分割字段名和类型（支持空格和制表符）
+    // 使用正则表达式匹配第一个空白字符
+    const firstSpaceMatch = withoutComment.match(/\s/);
+    if (!firstSpaceMatch) continue;
 
-    const fieldName = withoutComment.substring(0, firstSpaceIndex).trim();
-    const fieldType = withoutComment.substring(firstSpaceIndex + 1).trim();
+    const fieldName = withoutComment.substring(0, firstSpaceMatch.index!).trim();
+    const fieldType = withoutComment.substring(firstSpaceMatch.index! + 1).trim();
 
     if (fieldName && fieldType) {
       fields.push({
         name: fieldName,
-        comment: comment
+        comment: comment,
+        originalType: fieldType
       });
     }
   }
