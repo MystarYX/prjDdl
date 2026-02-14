@@ -528,7 +528,7 @@ export default function ExcelTab() {
       return;
     }
 
-    generateFinalSQL(finalTableName, tableComment, fields, setOdsSQL);
+    generateFinalSQL(finalTableName, tableComment, fields, setOdsSQL, 'STRING');
     setError('');
   };
 
@@ -651,10 +651,10 @@ export default function ExcelTab() {
   };
 
   // 生成最终的SQL
-  const generateFinalSQL = (tableName: string, tableComment: string, fields: { name: string; type: string; comment: string }[], setSQL: (sql: string) => void) => {
+  const generateFinalSQL = (tableName: string, tableComment: string, fields: { name: string; type: string; comment: string }[], setSQL: (sql: string) => void, etlTimeType: string = 'TIMESTAMP') => {
     // 计算对齐的最大长度
     const maxNameLength = Math.max(...fields.map(f => f.name.length), 'etl_time'.length);
-    const maxTypeLength = Math.max(...fields.map(f => f.type.length), 'string'.length);
+    const maxTypeLength = Math.max(...fields.map(f => f.type.length), etlTimeType.length);
     const maxCommentLength = Math.max(...fields.map(f => f.comment.length), '数据入库时间'.length);
 
     // 生成字段定义
@@ -668,9 +668,9 @@ export default function ExcelTab() {
       return `${comma}${namePadded} ${typePadded} COMMENT ${commentPadded}`;
     }).join('\n');
 
-    // 添加 etl_time 字段
+    // 添加 etl_time 字段（使用传入的类型，默认为 TIMESTAMP）
     const etlNamePadded = `etl_time${' '.repeat(Math.max(0, maxNameLength - 'etl_time'.length))}`;
-    const etlTypePadded = 'TIMESTAMP' + ' '.repeat(Math.max(0, maxTypeLength - 'TIMESTAMP'.length));
+    const etlTypePadded = etlTimeType + ' '.repeat(Math.max(0, maxTypeLength - etlTimeType.length));
     const etlCommentPadded = `'数据入库时间'${' '.repeat(Math.max(0, maxCommentLength - '数据入库时间'.length))}`;
     const etlField = `  ,${etlNamePadded} ${etlTypePadded} COMMENT ${etlCommentPadded}`;
 
