@@ -526,8 +526,11 @@ function tryParseFieldList(sql: string): FieldInfo[] {
     const trimmedExpr = expr.trim();
     if (!trimmedExpr) continue;
 
+    // 检查是否包含 COMMENT 'xxx' 格式（调整3：优先检测 COMMENT 格式）
+    const hasCommentFormat = /\s+COMMENT\s+['"][^'"]*['"]\s*$/i.test(trimmedExpr);
+    
     // 检查是否包含类型定义
-    if (hasTypeDefinition(expr)) {
+    if (hasTypeDefinition(expr) || hasCommentFormat) {
       // 使用解析字段定义的逻辑
       const fieldDef = parseFieldDefinition(trimmedExpr);
       if (fieldDef) {
@@ -901,17 +904,16 @@ function generateStarRocksDDL(adjustedFields: Array<{name: string, type: string,
     const pkField = selectPrimaryKey(fields);
     if (pkField) {
       ddlParts.push(`PRIMARY KEY (${pkField})`);
+      ddlParts.push("COMMENT ''");
       ddlParts.push(`DISTRIBUTED BY HASH(${pkField}) BUCKETS 10`);
     } else {
       // 如果没有找到主键，使用第一个字段作为分片键
       if (adjustedFields.length > 0) {
+        ddlParts.push("COMMENT ''");
         ddlParts.push(`DISTRIBUTED BY HASH(${adjustedFields[0].name}) BUCKETS 10`);
       }
     }
   }
-
-  // COMMENT
-  ddlParts.push("COMMENT ''");
 
   // PROPERTIES
   ddlParts.push('PROPERTIES (');
@@ -932,9 +934,14 @@ function generateDDL(fields: FieldInfo[], customRules: Record<string, InferenceR
   const adjustedFields = fields.map(field => {
     const fieldName = field.alias || field.name;
     
-    // 如果字段有原始类型定义，使用原始类型；否则使用推断的类型
+    // StarRocks: 忽略原始类型，统一使用推断的类型（调整2）
+    // Spark/MySQL: 保留原逻辑（有原始类型则使用原始类型）
     let fieldType: string;
-    if (field.originalType && field.originalType.trim()) {
+    if (databaseType === 'starrocks') {
+      // StarRocks 统一使用推断的类型
+      const typeInfo = inferFieldType(fieldName, field.comment, dbRules, databaseType);
+      fieldType = mapDataType(typeInfo, databaseType);
+    } else if (field.originalType && field.originalType.trim()) {
       fieldType = field.originalType.trim();
     } else {
       const typeInfo = inferFieldType(fieldName, field.comment, dbRules, databaseType);
