@@ -37,30 +37,45 @@ const parseFields = (text: string): Array<{ name: string; comment: string }> => 
     if (!trimmedLine || trimmedLine.startsWith('--')) continue;
 
     // 匹配格式: ,trl.splr_trcl_sers AS splr_trcl_sers --系列供应商
+    // 或者: m.acnt_org --核算组
+    // 或者: acnt_org STRING COMMENT '核算组'
     // 或者: splr_trcl_sers --系列供应商
-    // 或者: splr_trcl_sers COMMENT '系列供应商'
-
-    // 先找 AS 关键字
-    const asMatch = trimmedLine.match(/AS\s+([\w_]+)/i);
-    // 找 -- 注释
-    const commentMatch = trimmedLine.match(/--\s*(.+)$/);
 
     let fieldName = '';
     let comment = '';
+
+    // 先找 AS 关键字
+    const asMatch = trimmedLine.match(/AS\s+([\w_]+)/i);
+    
+    // 找 -- 注释（行尾注释）
+    const lineCommentMatch = trimmedLine.match(/--\s*(.+)$/);
+    
+    // 找 COMMENT 'xxx' 格式的注释
+    const commentKeywordMatch = trimmedLine.match(/COMMENT\s+['"]([^'"]*)['"]/i);
 
     if (asMatch) {
       // 有 AS 的情况，取 AS 后面的作为字段名
       fieldName = asMatch[1];
     } else {
-      // 没有 AS，尝试找第一个字段名（可能是逗号开头的）
-      const firstWordMatch = trimmedLine.match(/^,?\s*([\w_]+)/);
+      // 没有 AS，尝试找第一个字段名
+      // 支持带表别名的格式：m.acnt_org 或 t1.field_name
+      const firstWordMatch = trimmedLine.match(/^,?\s*([\w_]+(?:\.[\w_]+)?)/);
       if (firstWordMatch) {
-        fieldName = firstWordMatch[1];
+        let rawFieldName = firstWordMatch[1];
+        // 去掉表别名前缀（如 m.acnt_org → acnt_org）
+        const dotIndex = rawFieldName.indexOf('.');
+        if (dotIndex !== -1) {
+          fieldName = rawFieldName.substring(dotIndex + 1);
+        } else {
+          fieldName = rawFieldName;
+        }
       }
     }
 
-    if (commentMatch) {
-      comment = commentMatch[1].trim();
+    if (lineCommentMatch) {
+      comment = lineCommentMatch[1].trim();
+    } else if (commentKeywordMatch) {
+      comment = commentKeywordMatch[1].trim();
     }
 
     if (fieldName) {
