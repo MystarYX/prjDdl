@@ -161,6 +161,16 @@ const inferFieldType = (
                  (upper.includes('FLOAT') || upper.includes('DOUBLE'))) {
         return `${baseType}(${params.precision})`;
       }
+      
+      // DECIMAL/NUMERIC 类型如果没有配置参数，使用默认值 (18, 2)
+      if (upper.includes('DECIMAL') || upper.includes('NUMERIC')) {
+        return `${baseType}(18, 2)`;
+      }
+      
+      // VARCHAR/CHAR 类型如果没有配置参数，使用默认长度
+      if (upper.includes('VARCHAR') || upper.includes('CHAR')) {
+        return `${baseType}(256)`;
+      }
 
       return baseType;
     }
