@@ -28,7 +28,7 @@ const DATABASE_CONFIGS: Record<DatabaseType, {
 }> = {
   spark: { prefix: 'CREATE TABLE IF NOT EXISTS', comment: 'INLINE' },
   mysql: { prefix: 'CREATE TABLE ', comment: 'INLINE', addPk: true, addEngine: true },
-  starrocks: { prefix: 'CREATE TABLE IF NOT EXISTS', comment: 'INLINE', addPk: true },
+  starrocks: { prefix: 'CREATE TABLE ', comment: 'INLINE', addPk: true },
 };
 
 // 解析 CREATE TABLE 语句，提取字段信息
@@ -794,23 +794,7 @@ function mapDataType(typeInfo: TypeInfo | string, databaseType: DatabaseType): s
 function selectPrimaryKey(fields: FieldInfo[]): string | null {
   if (fields.length === 0) return null;
 
-  // 优先使用原始字段名判断，但返回别名（如果存在）
-  for (const field of fields) {
-    const originalName = field.name.toLowerCase();
-    const displayName = field.alias || field.name;
-    if (originalName.endsWith('icode')) {
-      return displayName;
-    }
-  }
-
-  for (const field of fields) {
-    const originalName = field.name.toLowerCase();
-    const displayName = field.alias || field.name;
-    if (originalName.endsWith('id') && !originalName.endsWith('icode')) {
-      return displayName;
-    }
-  }
-
+  // 优先使用第一个字段作为主键
   return fields[0].alias || fields[0].name;
 }
 
