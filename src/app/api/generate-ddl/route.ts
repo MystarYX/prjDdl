@@ -751,8 +751,10 @@ function inferFieldType(fieldName: string, fieldComment: string, customRules?: I
   // 如果没有匹配到规则，根据数据库类型返回固定的默认类型
   if (databaseType === 'spark') {
     return { type: 'STRING' };
-  } else if (databaseType === 'mysql' || databaseType === 'starrocks') {
+  } else if (databaseType === 'mysql') {
     return { type: 'VARCHAR', length: 256 };
+  } else if (databaseType === 'starrocks') {
+    return { type: 'VARCHAR', length: 512 };
   }
 
   // 默认返回 STRING
@@ -771,7 +773,9 @@ function mapDataType(typeInfo: TypeInfo | string, databaseType: DatabaseType): s
 
   // MySQL, Spark, StarRocks
   if (data_type === 'STRING') {
-    return databaseType === 'spark' ? 'STRING' : 'VARCHAR(255)';
+    if (databaseType === 'spark') return 'STRING';
+    if (databaseType === 'starrocks') return 'VARCHAR(512)';
+    return 'VARCHAR(256)';
   }
   if (data_type.startsWith('DECIMAL')) {
     return precision && scale ? `DECIMAL(${precision},${scale})` : 'DECIMAL(24,6)';
@@ -780,7 +784,9 @@ function mapDataType(typeInfo: TypeInfo | string, databaseType: DatabaseType): s
     return databaseType === 'spark' ? 'TIMESTAMP' : 'DATETIME';
   }
   if (data_type === 'VARCHAR' || data_type === 'CHAR') {
-    return length ? `${data_type}(${length})` : 'VARCHAR(255)';
+    if (length) return `${data_type}(${length})`;
+    if (databaseType === 'starrocks') return 'VARCHAR(512)';
+    return 'VARCHAR(256)';
   }
   if (data_type.startsWith('FLOAT')) {
     return precision ? `FLOAT(${precision})` : 'FLOAT';
